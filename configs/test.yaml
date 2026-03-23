@@ -1,0 +1,39 @@
+# Global variables
+experiment_name: "baseline"
+artifacts_dir: "/mnt/ssd/trained_models/"
+
+defaults:
+  - _self_
+  - paths: local
+  - segmentation_ds: reben_7k
+
+# Hardware
+batch_size: 128
+num_workers: 4
+prefetch_factor: 2
+
+### Model ###
+patch_size: 8
+model:
+  # Segmentation head
+  num_classes: ${num_classes}
+  pyramid_channels: 256
+  segmentation_channels: 128
+
+  img_size: ${img_size}
+
+  # Encoder
+  patch_size: ${patch_size}
+  in_chans: ${num_bands}
+  embed_dim: 384
+  depth: 12
+  num_heads: 6
+
+  # Model Hyperparameters
+  mlp_ratio: 4.0
+  drop_path_rate: 0.0
+  cls_token: true
+  norm_layer:
+    _target_: torch.nn.LayerNorm
+    _partial_: true
+    eps: 1e-6

@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+
+# Files
+/best_pretrained_ckpt.txt
+
+# Folders
+/checkpoints/
+/outputs/
+/RS_MAE-Thesis/
+/sandbox/
+/wandb/
+
+# Other
+/.git/
+/.idea/

@@ -1,0 +1,21 @@
+# @package _global_
+experiment_name: "feat_guided"
+
+masker:
+  _target_: models.strategies.masker.RandomMasker
+
+target:
+  _target_: models.strategies.target.HOGNDITarget
+  norm_pix: true
+  # NDI
+  bands: ${bands}
+  # HOG
+  patch_size: ${patch_size}
+  pool: 8
+  nbins: 9
+  use_max_gradient: true
+  gaussian_window: null # 14 := grid_size i.e. img_size // patch_size
+  normalize: true
+
+loss:
+  _target_: models.strategies.loss.MaskedMSELoss

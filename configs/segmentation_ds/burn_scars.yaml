@@ -1,0 +1,20 @@
+# @package _global_
+
+# Dataset-dependent
+img_size: 224
+batch_size: 16
+num_classes: 2
+num_bands: 6
+
+# Data
+dataset:
+  data_dir: ${paths.burn_scars_dir}
+  split_file: "datasets/splits/burn_scars.csv"
+  bands: ["B02", "B03", "B04", "B8A", "B11", "B12"]
+  normalize: true
+
+  grid_sampling: true
+  crop_size: ${img_size}
+  min_margin: null # ==> margin = 64
+
+dataset_name: "burn_scars"

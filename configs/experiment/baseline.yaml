@@ -1,0 +1,13 @@
+# @package _global_
+experiment_name: "baseline"
+
+masker:
+  _target_: models.strategies.masker.RandomMasker
+
+target:
+  _target_: models.strategies.target.NormalizedPixelTarget
+  patch_size: ${patch_size}
+  in_chans: ${in_chans}
+
+loss:
+  _target_: models.strategies.loss.MaskedMSELoss

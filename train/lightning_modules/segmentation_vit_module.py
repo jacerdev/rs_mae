@@ -1,0 +1,192 @@
+from dataclasses import asdict
+import lightning as L
+import logging
+import torch
+import torch.nn as nn
+import torchvision.utils as vutils
+import torchvision.transforms.functional as TF
+from torchmetrics.classification import MulticlassAccuracy, JaccardIndex, F1Score
+
+from models.segmentation.segmentation_vit import SegmentationViT
+from test.test import tiled_evaluation
+from utils.config import SegmentationViT_Cfg
+from utils.tensor_ops import sliding_window_inference
+from utils.utils import get_parameter_groups_llrd
+from utils.visualization import quant_norm, get_color_tensor
+
+REFERENCE_BATCH_SIZE = 256
+DECODER_LR_SCALER = 10 # uninitialized_weights_lr = pretrained_weights_lr * DECODER_LR_SCALER
+
+class SegmentationViTModule(L.LightningModule):
+    def __init__(self, model_cfg: SegmentationViT_Cfg,
+                 base_lr,
+                 reduce_lr_factor,
+                 reduce_lr_threshold,
+                 reduce_lr_patience,
+                 layer_lr_decay,
+                 weight_decay,
+                 bands=None, dataset_name=None):
+        super().__init__()
+
+        self.save_hyperparameters()
+        self.model_cfg = model_cfg
+        self.base_lr = base_lr
+        self.reduce_lr_factor = reduce_lr_factor
+        self.reduce_lr_threshold = reduce_lr_threshold
+        self.reduce_lr_patience = reduce_lr_patience
+        self.layer_lr_decay = layer_lr_decay
+        self.weight_decay = weight_decay
+
+        self.bands = bands
+        self.dataset_name = dataset_name
+        self.color_tensor = get_color_tensor(self.dataset_name) if self.dataset_name is not None else \
+                            get_color_tensor(max_id=self.model_cfg.num_classes)
+
+        self.model = SegmentationViT(**asdict(self.model_cfg))
+
+        self.loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
+        self.train_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
+        self.val_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
+        
+        self.train_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
+        self.val_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
+        
+        self.train_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
+        self.val_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
+
+    def forward(self, x):
+        return self.model(x)
+
+    def on_train_epoch_end(self):
+        # update grid sampling offsets for the next epoch (SegmentationDataset.set_epoch)
+        train_ds = self.trainer.datamodule.train_ds
+        if hasattr(train_ds, "set_epoch"):
+            train_ds.set_epoch(self.trainer.current_epoch + 1)
+
+    def training_step(self, batch, batch_idx):
+        imgs, masks = batch
+        preds = self.model(imgs) # (B, num_classes, H, W)
+        masks = masks.long()
+        
+        loss = self.loss_fn(preds, masks)
+        self.train_acc(preds, masks)
+        self.train_iou(preds, masks)
+        self.train_f1(preds, masks)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("train_iou", self.train_iou, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        self.log("train_f1", self.train_f1, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        
+        if batch_idx == 0:
+            self._log_predictions({"imgs": imgs, "preds": preds, "masks": masks}, "train")
+            
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        imgs, masks = batch # imgs could be larger than img_size
+        masks = masks.long()
+        _, _, H, W = imgs.shape
+        input_size = self.model.img_size
+
+        if H <= input_size and W <= input_size:
+            preds = self.model(imgs)
+            loss = self.loss_fn(preds, masks)
+            for torchmetric in [self.val_acc, self.val_iou, self.val_f1]:
+                torchmetric.update(preds, masks)
+        else:
+            preds_list = []
+            for sample in imgs:
+                pred = sliding_window_inference(model=self.model, image=sample,
+                                            window_size=input_size,
+                                            stride=input_size // 2,
+                                            num_classes=self.model.num_classes,
+                                            batch_size=self.trainer.datamodule.batch_size,
+                                            merger_device='cpu')
+                preds_list.append(pred)
+            preds = torch.stack(preds_list, dim=0) # (B, num_classes, H, W) on CPU
+            
+            loss = tiled_evaluation(preds=preds, masks=masks, input_size=input_size,
+                                   num_classes=self.model.num_classes,
+                                   batch_size=self.trainer.datamodule.batch_size,
+                                   loss_fn=self.loss_fn,
+                                   torchmetrics=[self.val_acc, self.val_iou, self.val_f1])
+
+        self.log("val_loss", loss, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("val_acc", self.val_acc, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("val_iou", self.val_iou, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("val_f1", self.val_f1, on_epoch=True, prog_bar=True, sync_dist=True)
+        
+        if batch_idx == 0:
+            self._log_predictions({"imgs": imgs, "preds": preds, "masks": masks}, "val")
+
+    def on_before_optimizer_step(self, optimizer):
+        norms = L.pytorch.utilities.grad_norm(self, norm_type=2)
+        self.log_dict(norms)
+        
+    def configure_optimizers(self):
+        effective_batch_size = self.trainer.datamodule.batch_size
+        if self.trainer.world_size > 1:
+            effective_batch_size *= self.trainer.world_size
+        if self.trainer.accumulate_grad_batches > 1:
+            effective_batch_size *= self.trainer.accumulate_grad_batches
+            
+        logging.info(f"Effective batch size: {effective_batch_size}")
+
+        scaled_backbone_lr = self.base_lr * effective_batch_size / REFERENCE_BATCH_SIZE
+        scaled_decoder_lr = scaled_backbone_lr * DECODER_LR_SCALER
+        logging.info(f"Scaled Backbone LR: {scaled_backbone_lr:.6f} | Scaled Decoder LR: {scaled_decoder_lr:.6f}")
+        
+        # retrieve the custom parameter groups
+        param_groups = get_parameter_groups_llrd(self.model, weight_decay=self.weight_decay,
+                                backbone_lr=scaled_backbone_lr, decoder_lr=scaled_decoder_lr,
+                                layer_lr_decay=self.layer_lr_decay)
+        optimizer = torch.optim.AdamW(param_groups, betas=(0.9, 0.999))
+
+        # scheduler
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min",
+                                                factor=self.reduce_lr_factor, patience=self.reduce_lr_patience, threshold=self.reduce_lr_threshold,
+                                                min_lr=1e-6)
+
+        return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "monitor": "val_loss",
+                                                        "interval": "epoch", "frequency": 1}}
+
+    def _log_predictions(self, outputs, split):
+        imgs, preds, masks = outputs["imgs"].detach(), outputs["preds"].detach(), outputs["masks"].detach()
+        
+        # get predicted classes
+        pred_classes = torch.argmax(preds, dim=1) # (B, H, W)
+        
+        B, C, H, W = imgs.shape
+
+        if H > 768 or W > 768:
+            crop_size = min(768, H, W)
+            imgs = TF.center_crop(imgs, output_size=crop_size)
+            masks = TF.center_crop(masks, output_size=crop_size)
+            pred_classes = TF.center_crop(pred_classes, output_size=crop_size)
+            num_samples = 1
+        elif H > 256 or W > 256:
+            num_samples = min(B, 2)
+        else:
+            num_samples = min(B, 5)
+        
+        selected_imgs = imgs[:num_samples]
+        selected_masks = masks[:num_samples]
+        selected_preds = pred_classes[:num_samples]
+
+        true_color_bands = ["B04", "B03", "B02"]
+        band_indices = [self.bands.index(b) for b in true_color_bands if b
+                        in self.bands] if self.bands is not None else [0, 1, 2]
+
+        img_vis = quant_norm(selected_imgs[:, band_indices, :, :])
+        
+        color_tensor = self.color_tensor.to(masks.device)            
+        # mask.shape = (K, H, W) ==> color_tensor[mask].shape = (K, H, W, 3)
+        gt_mask_vis = color_tensor[selected_masks].permute(0, 3, 1, 2) # (K, 3, H, W)
+        pred_mask_vis = color_tensor[selected_preds].permute(0, 3, 1, 2)
+        
+        rows = [img_vis, gt_mask_vis, pred_mask_vis]
+        combined = torch.cat(rows, dim=0)
+        
+        grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
+        tag = f"predictions / {split}"
+        self.logger.log_image(key=tag, images=[grid], step=self.global_step)
