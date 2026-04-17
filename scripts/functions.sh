@@ -43,3 +43,21 @@ download_extract_reben() {
     
     # ./rico-hdl.AppImage bigearthnet --bigearthnet-s2-dir BigEarthNet-S2/ --bigearthnet-reference-maps-dir Reference_Maps/ --target-dir BigEarthNet-S2_lmdb
 }
+
+on_exit() {
+    local exit_code=$?
+    # Defuse the traps immediately to prevent recursion
+    trap - EXIT TERM INT
+
+    # Kill background python process if it's still running
+    if [ -n "$child_pid" ]; then kill "$child_pid" 2>/dev/null || true; fi
+
+    set +e  # Disable strict exit for the cleanup
+    
+    if [ "$exit_code" -eq 0 ]; then send_telegram "✅ Finished training successfully at $(date "+%Y-%m-%d %H:%M:%S")"
+    else send_telegram "❌ Training failed (exit code $exit_code) on $(hostname) at $(date "+%Y-%m-%d %H:%M:%S")"
+    fi
+    #rsync -av /scratch/jacer/outputs/ /home/users/j/jacer/outputs/
+    #send_telegram "📁 Finished copying outputs to home directory"
+    exit $exit_code
+}

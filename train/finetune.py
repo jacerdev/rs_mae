@@ -88,7 +88,7 @@ def main(cfg: DictConfig):
         reduce_lr_patience=cfg.reduce_lr_patience,
         layer_lr_decay=cfg.layer_lr_decay,
         weight_decay=cfg.weight_decay,
-        bands=cfg.dataset.bands, cfg.dataset_name=cfg.dataset_name)
+        bands=cfg.dataset.bands, dataset_name=cfg.dataset_name)
 
     # Callbacks
     checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=3,

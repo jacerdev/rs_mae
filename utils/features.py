@@ -98,18 +98,32 @@ class HOGLayer(nn.Module):
         
         return pooled # (B, out_channels, nbins, h, w)
     
-def get_hog_saliency(hog_features_grid): # (B, C, nbins, h_grid, w_grid)
+class HOGSaliency(HOGLayer):
     """
-    SelectiveMAE's saliency for selective masking
-    (Don't call it on L2 normalized hog features, otherwise
-    noisy features get highest saliency, instead of patches with clean edges)
+    Saliency extractor based on HOG features.
+    Computes HOG features and selectively extracts Min-Max normalized saliency per patch.
     """
-    saliency = hog_features_grid.sum(dim=(1, 2)) # (B, h_grid, w_grid)
-    mean = saliency.mean(dim=(1, 2), keepdim=True) # (B, 1, 1)
-    var = saliency.var(dim=(1, 2), keepdim=True)
-    out = (saliency - mean) / (var + 1e-6).sqrt()
-    return out # (B, h_grid, w_grid)
+    def __init__(self, nbins=9, pool=8, in_channels=10):
+        # enforce normalize=False as otherwise noisy features get highest saliency, instead of clean edges
+        super().__init__(nbins, pool, in_channels, use_max_gradient=False, gaussian_window=None, normalize=False)
 
+    def forward(self, x):
+        # x: (B, C, H, W)
+        hog_features_grid = super().forward(x) # (B, C, nbins, h_grid, w_grid)
+        saliency = hog_features_grid.sum(dim=(1, 2)) # (B, h_grid, w_grid)
+
+        # SelectiveMAE's saliency
+        #mean = saliency.mean(dim=(1, 2), keepdim=True) # (B, 1, 1)
+        #var = saliency.var(dim=(1, 2), keepdim=True)
+        #out = (saliency - mean) / (var + 1e-6).sqrt()
+
+        # Min-max normalization
+        #s_flat = saliency.view(saliency.shape[0], -1) 
+        #s_min = s_flat.min(dim=1)[0].view(-1, 1, 1)
+        #s_max = s_flat.max(dim=1)[0].view(-1, 1, 1)
+        #out = (saliency - s_min) / (s_max - s_min + 1e-6)
+        
+        return saliency # (B, h_grid, w_grid)
 
 class NDILayer(nn.Module):
     """
@@ -120,9 +134,18 @@ class NDILayer(nn.Module):
 
     (to be computed on the original radiometric values, not on the normalized ones !)
     """
-    def __init__(self, bands):
+    def __init__(self, bands, bands_mean=None, bands_std=None):
         super().__init__()
         self.bands = bands
+        
+        # Denormalization for NDI computation (which requires raw reflectances)
+        if bands_mean is not None and bands_std is not None:
+            self.register_buffer("denorm_mean", torch.tensor(bands_mean, dtype=torch.float32).view(-1, 1, 1))
+            self.register_buffer("denorm_std",  torch.tensor(bands_std,  dtype=torch.float32).view(-1, 1, 1))
+        else:
+            self.denorm_mean = None
+            self.denorm_std = None
+
         try:
             self.nir_idx = bands.index("B08")
             self.red_idx = bands.index("B04")
@@ -134,6 +157,9 @@ class NDILayer(nn.Module):
     @torch.no_grad()
     def forward(self, x):
         # x: [B, C, H, W]
+        if self.denorm_mean is not None and self.denorm_std is not None:
+            x = x * self.denorm_std + self.denorm_mean
+            
         nir = x[:, self.nir_idx:self.nir_idx+1]
         red = x[:, self.red_idx:self.red_idx+1]
         green = x[:, self.green_idx:self.green_idx+1]
@@ -147,50 +173,35 @@ class NDILayer(nn.Module):
         
         return out
 
+class NDISaliency(NDILayer):
+    """
+    Saliency extractor based on NDI indices.
+    Calculates Coefficient of Variation (std / abs_mean) for each patch
+    """
+    def __init__(self, patch_size, bands, bands_mean=None, bands_std=None):
+        super().__init__(bands, bands_mean=bands_mean, bands_std=bands_std)
+        self.patch_size = patch_size
 
-
-
-"""
-def draw_hog_arrows(hog_grid, image=None, color=(255, 0, 0), thickness=1):
-    
-    hog_grid: [h_grid, w_grid, nbins] (single channel's hog features)
-    image: [H, W, C] (optional background)
-    
-    if isinstance(hog_grid, torch.Tensor):
-        hog_grid = hog_grid.detach().cpu().numpy()
-    if image is not None:
-        if isinstance(image, torch.Tensor):
-            image = image.detach().cpu().numpy()
-            image = image.transpose(1, 2, 0)
+    def forward(self, x):
+        ndi_features = super().forward(x)  # (B, 3, H, W)
         
-    h_grid, w_grid, nbins = hog_grid.shape
-    
-    if image is not None:
-        out_img = image.copy()
-        patch_size = image.shape[0] // h_grid
-        if image.dtype != 'uint8': color = (color[0] / 255, color[1] / 255, color[2] / 255)
-    else:
-        patch_size = 8
-        out_img = np.zeros((h_grid * patch_size, w_grid * patch_size, 3), dtype=np.uint8)
+        # Unfold into patches: (B, 3, h_grid, w_grid, patch_size, patch_size)
+        patches = ndi_features.unfold(2, self.patch_size, self.patch_size).unfold(3, self.patch_size, self.patch_size)
+        
+        # std and mean over patches
+        mean_abs = patches.abs().mean(dim=(-1, -2))
+        std = patches.std(dim=(-1, -2), unbiased=False)
+        
+        cv = std / (mean_abs + 1e-6)  # (B, 3, h_grid, w_grid)
+        
+        # average over channels
+        saliency = cv.mean(dim=1)  # (B, h_grid, w_grid)
+        
+        # Min-max normalization
+        #s_flat = saliency.view(saliency.shape[0], -1) 
+        #s_min = s_flat.min(dim=1)[0].view(-1, 1, 1)
+        #s_max = s_flat.max(dim=1)[0].view(-1, 1, 1)
+        #out = (saliency - s_min) / (s_max - s_min + 1e-6)
 
-    angles = np.linspace(0, np.pi, nbins, endpoint=False)
-    scale = patch_size / 2.5
+        return saliency  # (B, h_grid, w_grid)
 
-    for r in range(h_grid):
-        for c in range(w_grid):
-            # patch center
-            cx = int(c * patch_size + patch_size // 2)
-            cy = int(r * patch_size + patch_size // 2)
-            
-            for bin_idx in range(nbins):
-                mag = hog_grid[r, c, bin_idx]
-                
-                if mag > 0.05: # assuming L2 normalized hog features
-                    dx = mag * math.cos(angles[bin_idx]) * scale
-                    dy = mag * math.sin(angles[bin_idx]) * scale
-                    # end points for the line (drawing from center)
-                    p1 = (int(cx - dx), int(cy - dy))
-                    p2 = (int(cx + dx), int(cy + dy))
-                    cv2.line(out_img, p1, p2, color, thickness, cv2.LINE_AA)
-                    
-    return out_img"""

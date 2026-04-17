@@ -8,8 +8,8 @@ import torchvision.utils as vutils
 from models.backbones import MaskedAutoencoderViT
 from models.strategies.target import NormalizedPixelTarget, HOGNDITarget
 from utils.config import MaskedAutoencoderViT_Cfg
-from utils.tensor_ops import unpatchify
-from utils.visualization import quant_norm, generate_hog_image
+from utils.spatial_ops import unpatchify
+from utils.visualization import quant_norm, generate_hog_image, generate_saliency_grid
 
 
 REFERENCE_BATCH_SIZE = 256
@@ -38,6 +38,10 @@ class MAEModule(L.LightningModule):
 
     def forward(self, x):
         return self.model(x, mask_ratio=self.mask_ratio)
+
+    def on_train_epoch_end(self):
+        if hasattr(self.model, "masker") and hasattr(self.model.masker, "set_epoch"):
+            self.model.masker.set_epoch(self.current_epoch + 1)
 
     def training_step(self, batch, batch_idx):
         loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio)
@@ -130,17 +134,28 @@ class MAEModule(L.LightningModule):
             pred_restored = self.model.target.restore(pred, imgs=imgs)
             recon_restored = unpatchify(pred_restored, p, H, W, C)
             recon_restored = imgs * (1 - mask_expanded) + recon_restored * mask_expanded
-        
+
         # log
         band_combinations = {"true_color": ["B04", "B03", "B02"], "red_edge": ["B07", "B06", "B05"], "vegetation": ["B08", "B04", "B03"], "moisture_composite": ["B8A", "B11", "B12"]}
         band_indices = {name: [self.bands.index(b) for b in bands] for name, bands
                         in band_combinations.items()} if self.bands is not None else {"":[0,1,2]}
 
         for name, bands_idx in band_indices.items():
-            rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
-                    quant_norm(imgs[:, bands_idx, :, :]), # unmasked input
-                    quant_norm(target[:, bands_idx, :, :]), # target
-                    quant_norm(recon_raw[:, bands_idx, :, :])] # output
+            if hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker":
+                saliency = self.model.masker.saliency_fn(imgs).detach()
+                saliency_grid_tensors = []
+                for i in range(num_samples):
+                    s_overlay = generate_saliency_grid(saliency[i], image=quant_norm(imgs[i:i+1, bands_idx, :, :])[0].permute(1, 2, 0).cpu().numpy())
+                    saliency_grid_tensors.append(torch.from_numpy(s_overlay).float().permute(2, 0, 1) / 255.0)
+
+                rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
+                        torch.stack(saliency_grid_tensors).to(imgs.device), # saliency grid
+                        quant_norm(imgs[:, bands_idx, :, :])] # unmasked input
+            else:
+                rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
+                        quant_norm(imgs[:, bands_idx, :, :]), # unmasked input
+                        quant_norm(target[:, bands_idx, :, :]), # target
+                        quant_norm(recon_raw[:, bands_idx, :, :])] # output
             if recon_restored is not None:
                 rows.append(quant_norm(recon_restored[:, bands_idx, :, :])) # restored output
             combined = torch.cat(rows, dim=0)

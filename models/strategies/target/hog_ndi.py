@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from models.strategies.target.base import TargetGenerator
 from utils.features import HOGLayer, NDILayer
-from utils.tensor_ops import patchify, z_normalize, z_denormalize
+from utils.spatial_ops import patchify, z_normalize, z_denormalize
 
 
 class HOGNDITarget(nn.Module, TargetGenerator):
@@ -35,11 +35,13 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 
 		self.hog = HOGLayer(nbins=nbins, pool=pool, in_channels=len(bands), use_max_gradient=use_max_gradient,
 							gaussian_window=gaussian_window, normalize=normalize)
-		self.ndi = NDILayer(bands=bands)
-
+		
+		#self.ndi = NDILayer(bands=bands)
 		# Registered as buffers so they move with the model to(device)
-		self.register_buffer("denorm_mean", torch.tensor(bands_mean, dtype=torch.float32).view(-1, 1, 1))
-		self.register_buffer("denorm_std",  torch.tensor(bands_std,  dtype=torch.float32).view(-1, 1, 1))
+		#self.register_buffer("denorm_mean", torch.tensor(bands_mean, dtype=torch.float32).view(-1, 1, 1))
+		#self.register_buffer("denorm_std",  torch.tensor(bands_std,  dtype=torch.float32).view(-1, 1, 1))
+
+		self.ndi = NDILayer(bands=bands, bands_mean=bands_mean, bands_std=bands_std)
 
 	def forward(self, imgs):
 		"""
@@ -88,8 +90,8 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 		hog_tokens = hog_tokens.reshape(B, h * w, C * nb * n * n)
 
 		# NDI
-		if self.denorm_mean is not None and self.denorm_std is not None:
-			imgs = imgs * self.denorm_std + self.denorm_mean 
+		#if self.denorm_mean is not None and self.denorm_std is not None:
+			#imgs = imgs * self.denorm_std + self.denorm_mean 
 		ndi_img = self.ndi(imgs)
 		ndi_tokens = patchify(ndi_img, self.patch_size) 
 

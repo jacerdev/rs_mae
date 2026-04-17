@@ -1,5 +1,5 @@
 from models.strategies.target.base import TargetGenerator
-from utils.tensor_ops import patchify
+from utils.spatial_ops import patchify
 
 
 class IdentityTarget(TargetGenerator):

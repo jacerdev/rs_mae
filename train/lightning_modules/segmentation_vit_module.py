@@ -8,11 +8,10 @@ import torchvision.transforms.functional as TF
 from torchmetrics.classification import MulticlassAccuracy, JaccardIndex, F1Score
 
 from models.segmentation.segmentation_vit import SegmentationViT
-from test.test import tiled_evaluation
 from utils.config import SegmentationViT_Cfg
-from utils.tensor_ops import sliding_window_inference
+from utils.spatial_ops import windowed_inference, windowed_evaluation
 from utils.utils import get_parameter_groups_llrd
-from utils.visualization import quant_norm, get_color_tensor
+from utils.visualization import prepare_segmentation_visuals
 
 REFERENCE_BATCH_SIZE = 256
 DECODER_LR_SCALER = 10 # uninitialized_weights_lr = pretrained_weights_lr * DECODER_LR_SCALER
@@ -39,8 +38,6 @@ class SegmentationViTModule(L.LightningModule):
 
         self.bands = bands
         self.dataset_name = dataset_name
-        self.color_tensor = get_color_tensor(self.dataset_name) if self.dataset_name is not None else \
-                            get_color_tensor(max_id=self.model_cfg.num_classes)
 
         self.model = SegmentationViT(**asdict(self.model_cfg))
 
@@ -59,9 +56,8 @@ class SegmentationViTModule(L.LightningModule):
 
     def on_train_epoch_end(self):
         # update grid sampling offsets for the next epoch (SegmentationDataset.set_epoch)
-        train_ds = self.trainer.datamodule.train_ds
-        if hasattr(train_ds, "set_epoch"):
-            train_ds.set_epoch(self.trainer.current_epoch + 1)
+        if hasattr(self.trainer.datamodule.train_ds, "set_epoch"):
+            self.trainer.datamodule.train_ds.set_epoch(self.trainer.current_epoch + 1)
 
     def training_step(self, batch, batch_idx):
         imgs, masks = batch
@@ -96,7 +92,7 @@ class SegmentationViTModule(L.LightningModule):
         else:
             preds_list = []
             for sample in imgs:
-                pred = sliding_window_inference(model=self.model, image=sample,
+                pred = windowed_inference(model=self.model, image=sample,
                                             window_size=input_size,
                                             stride=input_size // 2,
                                             num_classes=self.model.num_classes,
@@ -105,8 +101,7 @@ class SegmentationViTModule(L.LightningModule):
                 preds_list.append(pred)
             preds = torch.stack(preds_list, dim=0) # (B, num_classes, H, W) on CPU
             
-            loss = tiled_evaluation(preds=preds, masks=masks, input_size=input_size,
-                                   num_classes=self.model.num_classes,
+            loss = windowed_evaluation(preds=preds, masks=masks, input_size=input_size,
                                    batch_size=self.trainer.datamodule.batch_size,
                                    loss_fn=self.loss_fn,
                                    torchmetrics=[self.val_acc, self.val_iou, self.val_f1])
@@ -153,16 +148,13 @@ class SegmentationViTModule(L.LightningModule):
     def _log_predictions(self, outputs, split):
         imgs, preds, masks = outputs["imgs"].detach(), outputs["preds"].detach(), outputs["masks"].detach()
         
-        # get predicted classes
-        pred_classes = torch.argmax(preds, dim=1) # (B, H, W)
-        
         B, C, H, W = imgs.shape
 
         if H > 768 or W > 768:
             crop_size = min(768, H, W)
             imgs = TF.center_crop(imgs, output_size=crop_size)
             masks = TF.center_crop(masks, output_size=crop_size)
-            pred_classes = TF.center_crop(pred_classes, output_size=crop_size)
+            preds = TF.center_crop(preds, output_size=crop_size)
             num_samples = 1
         elif H > 256 or W > 256:
             num_samples = min(B, 2)
@@ -171,18 +163,11 @@ class SegmentationViTModule(L.LightningModule):
         
         selected_imgs = imgs[:num_samples]
         selected_masks = masks[:num_samples]
-        selected_preds = pred_classes[:num_samples]
+        selected_preds = preds[:num_samples]
 
-        true_color_bands = ["B04", "B03", "B02"]
-        band_indices = [self.bands.index(b) for b in true_color_bands if b
-                        in self.bands] if self.bands is not None else [0, 1, 2]
-
-        img_vis = quant_norm(selected_imgs[:, band_indices, :, :])
-        
-        color_tensor = self.color_tensor.to(masks.device)            
-        # mask.shape = (K, H, W) ==> color_tensor[mask].shape = (K, H, W, 3)
-        gt_mask_vis = color_tensor[selected_masks].permute(0, 3, 1, 2) # (K, 3, H, W)
-        pred_mask_vis = color_tensor[selected_preds].permute(0, 3, 1, 2)
+        img_vis, gt_mask_vis, pred_mask_vis = prepare_segmentation_visuals(
+            selected_imgs, selected_masks, selected_preds, 
+            bands=self.bands, dataset_name=self.dataset_name)
         
         rows = [img_vis, gt_mask_vis, pred_mask_vis]
         combined = torch.cat(rows, dim=0)

@@ -11,7 +11,7 @@ target:
   bands: ${bands}
   # HOG
   patch_size: ${patch_size}
-  pool: 8
+  pool: ${patch_size} # 8
   nbins: 9
   use_max_gradient: true
   gaussian_window: null # 14 := grid_size i.e. img_size // patch_size

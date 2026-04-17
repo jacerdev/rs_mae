@@ -1,0 +1,18 @@
+# @package _global_
+experiment_name: "curriculum_ndi"
+
+masker:
+  _target_: models.strategies.masker.CurriculumMasker
+
+saliency_extractor:
+  _target_: utils.features.NDISaliency
+  patch_size: ${patch_size}
+  bands: ${bands}
+
+target:
+  _target_: models.strategies.target.NormalizedPixelTarget
+  patch_size: ${patch_size}
+  in_chans: ${in_chans}
+
+loss:
+  _target_: models.strategies.loss.MaskedMSELoss

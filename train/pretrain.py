@@ -42,6 +42,16 @@ def main(cfg: DictConfig):
             target = instantiate(cfg.target, bands_mean=[ReBENDataset.BAND_STATS["mean"][b] for b in cfg.bands],
                                              bands_std=[ReBENDataset.BAND_STATS["std"][b] for b in cfg.bands])
             loss = instantiate(cfg.loss)
+        case "curriculum_ndi" | "curriculum_hog":
+            if cfg.experiment_name == "curriculum_ndi":
+                from datasets import ReBENDataset
+                saliency_fn = instantiate(cfg.saliency_extractor, bands_mean=[ReBENDataset.BAND_STATS["mean"][b] for b in cfg.bands],
+                                                                  bands_std=[ReBENDataset.BAND_STATS["std"][b] for b in cfg.bands])
+            else:
+                saliency_fn = instantiate(cfg.saliency_extractor)
+            masker = instantiate(cfg.masker, saliency_fn=saliency_fn, num_epochs=cfg.max_epochs)
+            target = instantiate(cfg.target)
+            loss = instantiate(cfg.loss)
         case _:
             raise ValueError("Experiment not recognized.")
 

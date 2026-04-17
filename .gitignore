@@ -3,6 +3,8 @@ __pycache__/
 
 # Files
 /best_pretrained_ckpt.txt
+/todos.txt
+context.md
 
 # Folders
 /checkpoints/

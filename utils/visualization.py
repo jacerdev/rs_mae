@@ -62,29 +62,6 @@ def plot_images(imgs, ncols=None, title=None, img_titles=None, size=7, dataset_n
     if title is not None: plt.suptitle(title)
     plt.show()
 
-
-def plot_segmentation_mask(mask, dataset_name=None):
-    if isinstance(mask, torch.Tensor): 
-        mask = mask.cpu().numpy()
-
-    mask = mask.squeeze()
-    unique_ids = np.unique(mask)
-
-    color_tensor = get_color_tensor(dataset_name=dataset_name, max_id=unique_ids.max())
-    id_to_color = {uid: tuple(color_tensor[uid].tolist()) for uid in unique_ids}
-
-    # mask is (H, W). color_tensor[mask] gives (H, W, 3) in [0, 1] range
-    mask_tensor = torch.from_numpy(mask).long()
-    rgb_mask = (color_tensor[mask_tensor].numpy() * 255).astype(np.uint8)
-
-    # legend
-    patches = [mpatches.Patch(color=id_to_color[uid], label=f"{uid}")
-               for uid in id_to_color.keys()]
-
-    plt.imshow(rgb_mask, interpolation="nearest")
-    plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.axis("off")
-
 def get_color_tensor(dataset_name=None, max_id=None, cmap_name="tab20"):
     """Creates a tensor of shape (max_class_id + 2, 3) for efficient RGB masking"""
     if dataset_name is None:
@@ -122,6 +99,122 @@ def get_color_tensor(dataset_name=None, max_id=None, cmap_name="tab20"):
         
     return color_tensor
 
+def prepare_segmentation_visuals(imgs, masks, preds, bands=None, dataset_name=None):
+    color_tensor = get_color_tensor(dataset_name) if dataset_name is not None else \
+                    get_color_tensor(max_id=preds.shape[1]) # num_classes
+    color_tensor = color_tensor.to(masks.device)
+
+    # imgs
+    true_color_bands = ["B04", "B03", "B02"]
+    band_indices = [bands.index(b) for b in true_color_bands if b
+                    in bands] if bands is not None else [0, 1, 2]
+    imgs_vis = quant_norm(imgs[:, band_indices, :, :])
+    
+    # gt
+    gt_vis = color_tensor[masks].permute(0, 3, 1, 2) # (K, 3, H, W)
+
+    # preds
+    pred_classes = torch.argmax(preds, dim=1) # (B, H, W)
+    pred_vis = color_tensor[pred_classes].permute(0, 3, 1, 2)
+
+    return imgs_vis, gt_vis, pred_vis
+
+def generate_saliency_grid(saliency_grid, image=None, alpha=0.5, vmin=None, vmax=None):
+    if isinstance(saliency_grid, torch.Tensor):
+        saliency_grid = saliency_grid.detach().cpu().numpy()
+    
+    # prepare background image
+    img_min, img_max = image.min(), image.max()
+    img_norm = (image - img_min) / (img_max - img_min + 1e-6)
+    if img_norm.ndim == 2: 
+        img_norm = np.stack([img_norm] * 3, axis=-1)
+
+    # upscale grid using Nearest Neighbor to keep blocks sharp
+    h, w = image.shape[:2]
+    saliency_grid = saliency_grid.astype(np.float32)
+    saliency_up = cv2.resize(saliency_grid, (w, h), interpolation=cv2.INTER_NEAREST)
+
+    # apply 'jet' colormap
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+    sm = plt.cm.ScalarMappable(norm=norm, cmap='jet')
+    saliency_rgb = sm.to_rgba(saliency_up)[:, :, :3]
+    # alpha blend
+    overlay = (1 - alpha) * img_norm + alpha * saliency_rgb
+    
+    return (overlay * 255).astype(np.uint8)
+
+def generate_hog_image(hog_grid: torch.Tensor,
+                       image: np.ndarray = None,
+                       cell_size: int = 16) -> np.ndarray:
+    """Render a HOG visualisation from a grid of HOG features.
+
+    The function can either draw the orientation lines onto a blank canvas or
+    overlay them on top of a provided image.
+
+    Args:
+        hog_grid (torch.Tensor): HOG feature tensor of shape (Channels, nbins, h, w).
+            The channels are averaged before rendering.
+        image (np.ndarray, optional): image of shape (H, W, C) or (H, W)
+            to overlay the HOG lines on.  When provided, cell_size is
+            inferred from the image dimensions and the HOG grid size.
+            Defaults to None.
+        cell_size (int): Side length (in pixels) of each HOG cell used when
+            no overlay image is supplied.  Defaults to 16.
+
+    Returns:
+        np.ndarray: Rendered HOG image.
+
+        * Shape (H, W, C) (uint8) when *image* is provided.
+        * Shape (H, W) (uint8) when drawn on a blank canvas.
+    """
+    _, nbins, h_grid, w_grid = hog_grid.shape
+
+    if image is not None:
+        if isinstance(image, torch.Tensor):
+            image = image.cpu().numpy()
+            if image.ndim == 3:
+                image = image.transpose(1, 2, 0)
+
+        pool = image.shape[0] // h_grid
+        if image.max() <= 1.0:
+            hog_image = (image * 255).astype(np.uint8).copy()
+        else:
+            hog_image = image.astype(np.uint8).copy()
+    else:
+        pool = cell_size
+        hog_image = np.zeros((h_grid * pool, w_grid * pool, 1), dtype=np.uint8)
+
+    # Average over the channel dimension and move to CPU.
+    cell_gradient = hog_grid.mean(dim=0).detach().cpu().numpy()  # (nbins, h, w)
+    cell_gradient = np.abs(cell_gradient) # **2 # contrast boost
+    cell_gradient = np.nan_to_num(cell_gradient, nan=0.0)
+
+    cell_half = pool // 2
+    max_mag = cell_gradient.max()
+    angle_gap = 180.0 / nbins # HOG bins span [0°, 180°)
+
+    for x in range(h_grid):
+        for y in range(w_grid):
+            cell_grad = cell_gradient[:, x, y] / (max_mag + 1e-8)
+            for i, magnitude in enumerate(cell_grad):
+                if magnitude < 0.01:
+                    continue
+                # +90° so lines are drawn along the edge direction (perpendicular to the gradient)
+                angle_radian = math.radians(i * angle_gap + 90)
+                cos_a = math.cos(angle_radian)
+                sin_a = math.sin(angle_radian)
+                cx = x * pool + cell_half
+                cy = y * pool + cell_half
+                x1 = cx + int(magnitude * cell_half * cos_a)
+                y1 = cy + int(magnitude * cell_half * sin_a)
+                x2 = cx - int(magnitude * cell_half * cos_a)
+                y2 = cy - int(magnitude * cell_half * sin_a)
+                intensity = int(255 * math.sqrt(magnitude))
+                color = (intensity, intensity, intensity) if hog_image.shape[-1] == 3 else intensity
+                cv2.line(hog_image, (y1, x1), (y2, x2), color=color, thickness=2 if hog_image.shape[0] > 200 else 1)
+    return hog_image
+
+
 def _ensure_image_list(img):
     """
     Ensure input images are a list of (H, W, C) arrays suitable for plotting
@@ -157,72 +250,24 @@ def _ensure_image_list(img):
                     img[i] = img[i][..., None]
     return img
 
-def plot_saliency_grid(saliency_grid, image=None):
-    #fig, ax = plt.subplots(figsize=(6, 6))
-    if image is not None:
-        img_min = image.min()
-        image = (image - img_min) / (image.max() - img_min + 1e-6)
-        plt.imshow(image, cmap='gray')
-        plt.axis('off')
+def plot_segmentation_mask(mask, dataset_name=None):
+    if isinstance(mask, torch.Tensor): 
+        mask = mask.cpu().numpy()
 
-    im = plt.imshow(saliency_grid, cmap='jet', alpha=0.5 if image is not None else 1.0,
-                   extent=[0, image.shape[1], image.shape[0], 0] if image is not None else None)
-    plt.colorbar(im, fraction=0.046, pad=0.04, label="Saliency Score")
-  
-    #plt.grid(True)
-    plt.show()
+    mask = mask.squeeze()
+    unique_ids = np.unique(mask)
 
-def generate_hog_image(hog_grid: torch.Tensor, image=None, cell_size=16) -> np.ndarray:
-    """
-    Generate HOG image according to HOG features.
-    Args:
-        hog_grid: HOG features with shape (C, nbins, h, w) (the input gets averaged over the channel dimension)
-        image: image to overlay HOG features on with shape (H, W, 3)
-    Returns:
-        HOG image with shape (H, W, 1 or 3 if image is provided)
-        lines are drawn perpendicular to gradients (parallel to edges)
+    color_tensor = get_color_tensor(dataset_name=dataset_name, max_id=unique_ids.max())
+    id_to_color = {uid: tuple(color_tensor[uid].tolist()) for uid in unique_ids}
 
-    Reference: https://mmselfsup.readthedocs.io/en/1.x/_modules/mmselfsup/models/target_generators/hog_generator.html
-    """
-    if image is not None:
-        if isinstance(image, torch.Tensor):
-            image = image.detach().cpu().numpy()
-            image = image.transpose(1, 2, 0)
+    # mask is (H, W). color_tensor[mask] gives (H, W, 3) in [0, 1] range
+    mask_tensor = torch.from_numpy(mask).long()
+    rgb_mask = (color_tensor[mask_tensor].numpy() * 255).astype(np.uint8)
 
-    _, nbins, h_grid, w_grid = hog_grid.shape
-    if image is not None:
-        hog_image = image.copy()
-        pool = image.shape[0] // h_grid
-        if image.dtype != 'uint8':
-            hog_image = (hog_image * 255).astype(np.uint8)
-    else:
-        pool = cell_size
-        hog_image = np.zeros((h_grid * pool, w_grid * pool, 1), dtype=np.uint8)
+    # legend
+    patches = [mpatches.Patch(color=id_to_color[uid], label=f"{uid}")
+               for uid in id_to_color.keys()]
 
-    cell_gradient = np.nan_to_num(np.abs(np.array(hog_grid.mean(dim=0).detach().cpu()))**1.75, nan=0)
-    cell_width = pool // 2
-    max_mag = np.array(cell_gradient).max()
-    angle_gap = 180 / nbins # bug in the original implementation (should be 180, not 360)
-
-    for x in range(cell_gradient.shape[1]):
-        for y in range(cell_gradient.shape[2]):
-            cell_grad = cell_gradient[:, x, y]
-            cell_grad /= max_mag + 1e-8
-            for i, magnitude in enumerate(cell_grad):
-                if magnitude < 0.01:
-                    continue
-                angle = i * angle_gap
-                angle_radian = math.radians(angle + 90) # +90 to align with edge instead of gradient
-                x1 = cell_width + int(x * pool +
-                            magnitude * cell_width * math.cos(angle_radian))
-                y1 = cell_width + int(y * pool +
-                            magnitude * cell_width * math.sin(angle_radian))
-                x2 = cell_width + int(x * pool -
-                            magnitude * cell_width * math.cos(angle_radian))
-                y2 = cell_width + int(y * pool -
-                            magnitude * cell_width * math.sin(angle_radian))
-
-                val = int(255 * math.sqrt(magnitude))
-                cv2.line(hog_image, (y1, x1), (y2, x2), thickness=2 if hog_image.shape[0] > 200 else 1,
-                        color=(val, val, val) if hog_image.shape[-1] == 3 else val)
-    return hog_image
+    plt.imshow(rgb_mask, interpolation="nearest")
+    plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.axis("off")

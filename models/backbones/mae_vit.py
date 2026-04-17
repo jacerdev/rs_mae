@@ -89,10 +89,11 @@ class MaskedAutoencoderViT(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     def forward_encoder(self, x, mask_ratio):
+        imgs = x
         x = self.patch_embed(x)
         
         if self.use_decoder and mask_ratio > 0:
-            x, mask, ids_keep, ids_restore = self.masker.mask(x, mask_ratio)
+            x, mask, ids_keep, ids_restore = self.masker(x, mask_ratio, imgs=imgs) # pass imgs for saliency-based masking
         else:
             B, N, D = x.shape
             ids_keep = None # passing None makes SineCosinePosEmbedding bypass gather

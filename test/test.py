@@ -6,7 +6,6 @@ import hydra
 from hydra.utils import instantiate
 import logging
 from omegaconf import DictConfig
-import pandas as pd
 from pathlib import Path
 import torch
 import torch.nn as nn
@@ -17,9 +16,9 @@ from tqdm import tqdm
 from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset
 from models.segmentation.segmentation_vit import SegmentationViT
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
-from utils.tensor_ops import sliding_window_inference
-from utils.utils import get_checkpoint_path
-from utils.visualization import quant_norm, get_color_tensor, plot_images
+from utils.spatial_ops import windowed_inference, windowed_evaluation
+from utils.utils import get_checkpoint_path, save_results
+from utils.visualization import quant_norm, get_color_tensor, plot_images, prepare_segmentation_visuals
 
 
 class EvaluationDataset(torch.utils.data.Dataset):
@@ -141,12 +140,12 @@ def main(cfg: DictConfig):
                 else:
                     preds_list = []
                     for sample in imgs:
-                        pred = sliding_window_inference(model=model, image=sample,
-                                                     window_size=input_size,
-                                                     stride=input_size // 2,
-                                                     num_classes=num_classes,
-                                                     batch_size=cfg.batch_size,
-                                                     merger_device='cpu')
+                        pred = windowed_inference(model=model, image=sample,
+                                                window_size=input_size,
+                                                stride=input_size // 2,
+                                                num_classes=num_classes,
+                                                batch_size=cfg.batch_size,
+                                                merger_device='cpu')
                         preds_list.append(pred)
                     preds = torch.stack(preds_list, dim=0) # (B, C, H, W) on CPU
                 # Save each result
@@ -161,117 +160,32 @@ def main(cfg: DictConfig):
                 for torchmetric in [acc, iou, f1]:
                     torchmetric.update(preds, masks)
             else:
-                batch_loss_tensor = tiled_evaluation(
-                    preds=preds, # on CPU
-                    masks=masks,
-                    input_size=input_size,
-                    num_classes=num_classes,
-                    batch_size=cfg.batch_size,
-                    loss_fn=loss_fn,
-                    torchmetrics=[acc, iou, f1]
-                )
+                batch_loss_tensor = windowed_evaluation(preds=preds, # on CPU
+                                                        masks=masks,
+                                                        input_size=input_size,
+                                                        batch_size=cfg.batch_size,
+                                                        loss_fn=loss_fn,
+                                                        torchmetrics=[acc, iou, f1])
                 batch_loss = batch_loss_tensor.item() if batch_loss_tensor is not None else 0.0
 
             total_loss += batch_loss
 
-            #imgs_vis, gt_vis, pred_vis = create_visuals(imgs.detach().cpu(), masks.detach().cpu(), preds.detach().cpu(),
+            #imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(imgs.detach().cpu(), masks.detach().cpu(), preds.detach().cpu(),
             #                                            bands=dataset_cfg.bands, dataset_name=cfg.dataset_name)
             #plot_images(torch.stack([imgs_vis, gt_vis, pred_vis], dim=1).flatten(0,1), ncols=3)
 
     results = {f"loss": total_loss / len(test_loader),
-               f"acc":  acc.compute().item(),
-               f"iou":  iou.compute().item(),
-               f"f1":   f1.compute().item()}
+               f"Acc":  acc.compute().item(),
+               f"IoU":  iou.compute().item(),
+               f"F1":   f1.compute().item()}
+    
+    save_results(results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split, csv_path="results.csv")
+    
     for k, v in results.items():
         print(f"{k}: {v:.4f}")
 
-    # Save to results.csv
-    try:
-        display_name = (cfg.dataset_name + ("_" + ood_split if ood_split else "")).replace("_", " ").title()
-        experiment_col = cfg.experiment_name.replace("_", " ").title()
-
-        csv_path = Path("results.csv")
-        if csv_path.exists():
-            df = pd.read_csv(csv_path)
-            df = df.astype(object) 
-            df['Dataset'] = df['Dataset'].ffill()
-        else:
-            df = pd.DataFrame(columns=["Dataset", "Metric"])
-
-        if experiment_col not in df.columns:
-            df[experiment_col] = None
-        
-        df = df.reset_index(drop=True)
-
-        for metric_name, val in results.items():
-            if metric_name == "loss": continue
-            mask = (df["Dataset"] == display_name) & (df["Metric"] == metric_name)
-            if mask.any():
-                df.loc[mask, experiment_col] = f"{val*100.0:.2f}"
-            else:
-                new_row = {"Dataset": display_name, "Metric": metric_name, experiment_col: f"{val*100.0:.2f}"}
-                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
-        # Blank out redundant Dataset names for final formatting
-        df_out = df.copy()
-        df_out['Dataset'] = df_out['Dataset'].where(df_out['Dataset'] != df_out['Dataset'].shift(), "")
-        
-        df_out.to_csv(csv_path, index=False)
-        logging.info(f"Saved results to results.csv")
-    except Exception as e:
-        logging.warning(f"Could not save results to results.csv: {e}")
-
     return results
 
-def tiled_evaluation(preds, masks, input_size, num_classes, batch_size=1,
-                   loss_fn=None, torchmetrics=None):
-    if torchmetrics is None: torchmetrics = []
-    device = masks.device
-    
-    # Ensure preds and masks are compatible with CPU slicing if large
-    preds = preds.cpu()
-    masks = masks.long().cpu()
-    
-    _, _, H, W = preds.shape
-
-    # Tile size logic
-    tile_size = int(input_size * batch_size**0.5)
-    h, w = (H // (H // tile_size + 1), W // (W // tile_size + 1))
-
-    losses = []
-    for y in range(0, H, h):
-        for x in range(0, W, w):
-            y_end = min(y + h, H)
-            x_end = min(x + w, W)
-            preds_tile = preds[:, :, y:y_end, x:x_end].to(device)
-            masks_tile = masks[:, y:y_end, x:x_end].to(device)
-            
-            if loss_fn is not None:
-                losses.append(loss_fn(preds_tile, masks_tile))
-            for torchmetric in torchmetrics:
-                torchmetric.update(preds_tile, masks_tile)
-                    
-    loss = torch.stack(losses).mean() if loss_fn is not None else None
-    return loss
-
-def create_visuals(imgs, masks, preds, bands=None, dataset_name=None):
-        # get predicted classes
-        pred_classes = torch.argmax(preds, dim=1) # (B, H, W)
-
-        true_color_bands = ["B04", "B03", "B02"]
-        band_indices = [bands.index(b) for b in true_color_bands if b
-                        in bands] if bands is not None else [0, 1, 2]
-
-        imgs_vis = quant_norm(imgs[:, band_indices, :, :])
-        
-        num_classes = preds.shape[1]
-        color_tensor = get_color_tensor(dataset_name) if dataset_name is not None else \
-                       get_color_tensor(max_id=num_classes)
-        # mask.shape = (K, H, W) ==> color_tensor[mask].shape = (K, H, W, 3)
-        gt_vis = color_tensor[masks].permute(0, 3, 1, 2) # (K, 3, H, W)
-        pred_vis = color_tensor[pred_classes].permute(0, 3, 1, 2)
-
-        return imgs_vis, gt_vis, pred_vis
 
 if __name__ == "__main__":
     torch.set_float32_matmul_precision('high')

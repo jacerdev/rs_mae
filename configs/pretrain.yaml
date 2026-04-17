@@ -10,7 +10,7 @@ pretrained_ckpt_export_path: best_pretrained_ckpt.txt
 defaults:
   - _self_
   - paths: cluster
-  - experiment: feat_guided
+  - experiment: baseline
 
 ### Training hyperparameters ###
 batch_size: 512
