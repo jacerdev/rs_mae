@@ -21,7 +21,7 @@ base_lr: 3e-4
 
 weight_decay: 0.05
 gradient_clip_val: 1.0
-precision: "bf16-mixed"
+precision: "16-mixed"
 
 # Hardware
 num_workers: 26

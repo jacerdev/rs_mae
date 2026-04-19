@@ -5,7 +5,7 @@
 #SBATCH --mem=64G
 #SBATCH --cpus-per-gpu=30
 #SBATCH --partition=gpu_short
-#SBATCH --time=0-08:00:00
+#SBATCH --time=0-12:00:00
 
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=aloui@campus.tu-berlin.de
