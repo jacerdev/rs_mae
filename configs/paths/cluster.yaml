@@ -7,8 +7,3 @@ c2seg_dir:             "/scratch/jacer/datasets/c2seg/"
 burn_scars_dir:        "/scratch/jacer/datasets/burn_scars/"
 
 wandb_outdir:          "/scratch/jacer/outputs/training_out/"
-              # Make sure this path is set in scripts/cluster_train.sh
-              # to copy outputs back to personal storage
-
-# Other paths are defined relative to working directory
-# which is set in slurm job allocation in scripts/cluster_train.sh

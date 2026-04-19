@@ -1,16 +1,11 @@
-# Cloud-specific paths
-# Assumes data and outputs are stored inside a 'cloud/' directory in the project root.
+cloud_prefix: "cloud"
 
-reben_dir:             "cloud/data/reben/BigEarthNet-S2_lmdb/"
-reben_keys:            "cloud/data/reben/keys.pkl"
+reben_dir:             "${paths.cloud_prefix}/datasets/reben/BigEarthNet-S2_lmdb/"
+reben_keys:            "${paths.cloud_prefix}/datasets/reben/keys.pkl"
 
-sen1floods11_dir:      "cloud/data/sen1floods11/"
-cashew_plantation_dir: "cloud/data/cashew_plantation/"
-c2seg_dir:             "cloud/data/c2seg/"
-burn_scars_dir:        "cloud/data/burn_scars/"
+sen1floods11_dir:      "${paths.cloud_prefix}/datasets/sen1floods11/"
+cashew_plantation_dir: "${paths.cloud_prefix}/datasets/cashew_plantation/"
+c2seg_dir:             "${paths.cloud_prefix}/datasets/c2seg/"
+burn_scars_dir:        "${paths.cloud_prefix}/datasets/burn_scars/"
 
-wandb_outdir:          "cloud/outputs/training_out/"
-               # Make sure this path is mapped in scripts/cloud_train.sh
-
-# Other paths are defined relative to the working directory 
-# which is assumed to be the project root when executing on cloud.
+wandb_outdir:          "${paths.cloud_prefix}/outputs/training_out/"

@@ -22,11 +22,13 @@ mkdir -p '/scratch/jacer/outputs/training_out/' # Specified in configs/paths/clu
 
 set -e # Strict processing instructions
 
+# Environment activation
 export MAMBA_EXE='/home/users/j/jacer/myPrograms/mamba/micromamba'
 export MAMBA_ROOT_PREFIX='/home/users/j/jacer/.local/share/mamba'
 eval "$("$MAMBA_EXE" shell hook --shell bash)"
 micromamba activate /scratch/jacer/envs/rs_mae
 
+# WandB
 export WANDB_API_KEY=$(get_value "$SECRETS_PATH" "WANDB_API_KEY")
 export WANDB_MODE=${WANDB_MODE:-online}
 
@@ -50,26 +52,26 @@ send_telegram "🚀 Pretraining [$(date "+%Y-%m-%d %H:%M:%S")]"
 python -m train.pretrain "$@" experiment="$experiment" &
 child_pid=$!
 wait "$child_pid"
-# echo "--------------------------------------------------"
-# send_telegram "🚀 Finetuning 1: reben_7k"
-# python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=reben_7k &
-# child_pid=$!
-# wait "$child_pid"
-# echo "--------------------------------------------------"
-# send_telegram "🚀 Finetuning 2: sen1floods11"
-# python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=sen1floods11 &
-# child_pid=$!
-# wait "$child_pid"
-# echo "--------------------------------------------------"
-# send_telegram "🚀 Finetuning 3: cashew_plantation"
-# python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=cashew_plantation &
-# child_pid=$!
-# wait "$child_pid"
-# echo "--------------------------------------------------"
-# send_telegram "🚀 Finetuning 4: c2seg"
-# python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=c2seg &
-# child_pid=$!
-# wait "$child_pid"
+echo "--------------------------------------------------"
+send_telegram "🚀 Finetuning 1: reben_7k"
+python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=reben_7k &
+child_pid=$!
+wait "$child_pid"
+echo "--------------------------------------------------"
+send_telegram "🚀 Finetuning 2: sen1floods11"
+python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=sen1floods11 &
+child_pid=$!
+wait "$child_pid"
+echo "--------------------------------------------------"
+send_telegram "🚀 Finetuning 3: cashew_plantation"
+python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=cashew_plantation &
+child_pid=$!
+wait "$child_pid"
+echo "--------------------------------------------------"
+send_telegram "🚀 Finetuning 4: c2seg"
+python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=c2seg &
+child_pid=$!
+wait "$child_pid"
 # echo "--------------------------------------------------"
 # send_telegram "🚀 Finetuning 5: burn_scars"
 # python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=burn_scars &
