@@ -10,7 +10,7 @@ dataset:
   data_dir: ${paths.sen1floods11_dir}
   split_file: "datasets/splits/sen1floods11.csv"
   bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
-  normalize: true
+  normalize: false
 
   grid_sampling: true
   crop_size: ${img_size}

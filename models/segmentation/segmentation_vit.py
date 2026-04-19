@@ -60,6 +60,10 @@ class MAEPyramidEncoder(nn.Module):
         return self._out_channels
         
     def forward(self, x):
+        if self.vit.normalize:
+            x = (x - self.vit.mean) / self.vit.std
+        x = torch.nan_to_num(x, nan=0.0)
+
         B, C, H, W = x.shape
         
         x_emb = self.vit.patch_embed(x)

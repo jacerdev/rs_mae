@@ -59,4 +59,7 @@ model:
     _target_: torch.nn.LayerNorm
     _partial_: true
     eps: 1e-6
+    
+  normalize: true
+  bands: ${dataset.bands}
 

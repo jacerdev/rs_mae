@@ -88,6 +88,9 @@ class MaskedAutoencoderViT_Cfg:
     drop_path_rate: float
     cls_token: bool
     norm_layer: Any
+    
+    normalize: bool
+    bands: List[str]
 
     # Instantiated Objects
     masker: Any
@@ -115,3 +118,6 @@ class SegmentationViT_Cfg:
     drop_path_rate: float
     cls_token: bool
     norm_layer: Any
+    
+    normalize: bool
+    bands: List[str]

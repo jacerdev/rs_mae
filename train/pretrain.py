@@ -30,28 +30,18 @@ def main(cfg: DictConfig):
         resume="allow" if cfg.wandb.run_id else None)
 
     # Experiment
-    masker = target = loss = None
+    masker = None
+    target = instantiate(cfg.target)
+    loss = instantiate(cfg.loss)
+
     match cfg.experiment_name:
         case "baseline":
             masker = instantiate(cfg.masker)
-            target = instantiate(cfg.target)
-            loss = instantiate(cfg.loss)
         case "feat_guided":
-            from datasets import ReBENDataset # just cuz it's set to normalize so NDI layer needs to denormalize
             masker = instantiate(cfg.masker)
-            target = instantiate(cfg.target, bands_mean=[ReBENDataset.BAND_STATS["mean"][b] for b in cfg.bands],
-                                             bands_std=[ReBENDataset.BAND_STATS["std"][b] for b in cfg.bands])
-            loss = instantiate(cfg.loss)
         case "curriculum_ndi" | "curriculum_hog":
-            if cfg.experiment_name == "curriculum_ndi":
-                from datasets import ReBENDataset
-                saliency_fn = instantiate(cfg.saliency_extractor, bands_mean=[ReBENDataset.BAND_STATS["mean"][b] for b in cfg.bands],
-                                                                  bands_std=[ReBENDataset.BAND_STATS["std"][b] for b in cfg.bands])
-            else:
-                saliency_fn = instantiate(cfg.saliency_extractor)
-            masker = instantiate(cfg.masker, saliency_fn=saliency_fn, num_epochs=cfg.max_epochs)
-            target = instantiate(cfg.target)
-            loss = instantiate(cfg.loss)
+            saliency_extractor = instantiate(cfg.saliency_extractor)
+            masker = instantiate(cfg.masker, saliency_extractor=saliency_extractor, num_epochs=cfg.max_epochs)
         case _:
             raise ValueError("Experiment not recognized.")
 

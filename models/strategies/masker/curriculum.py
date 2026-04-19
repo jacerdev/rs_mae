@@ -8,19 +8,23 @@ class CurriculumMasker(nn.Module, Masker):
     """
     Curriculum Masker that transitions from Easy to Random to Hard tasks based on saliency and epoch.
     """
-    def __init__(self, saliency_fn, num_epochs):
+    def __init__(self, saliency_extractor, num_epochs, easy_end=0.1, hard_start=0.6, min_w=-0.5, max_w=0.7):
         nn.Module.__init__(self)
         Masker.__init__(self)
-        self.saliency_fn = saliency_fn
+        self.saliency_extractor = saliency_extractor
         self.num_epochs = num_epochs
         self.epoch = 0
+
+        self.min_w = min_w
+        self.max_w = max_w
+        self.easy_end = easy_end
+        self.hard_start = hard_start
 
     def set_epoch(self, epoch):
         self.epoch = epoch
 
     def compute_masking_score(self, saliency, epoch, num_epochs):
         """
-        Compute the masking score based on saliency and current epoch.
         Higher score patches are to be masked.
         
         Args:
@@ -31,19 +35,23 @@ class CurriculumMasker(nn.Module, Masker):
         Returns:
             scores: Tensor of shape (B, N) containing the masking scores.
         """
-        # α = 2.e/E − 1, sweeps from -1 to 1
-        alpha = 2.0 * epoch / num_epochs - 1.0
-        
         # noise uniformly sampled from range [0,1]
         noise = torch.rand_like(saliency)
         
-        # score = α. saliency + (1- |α|).noise
-        score = alpha * saliency + (1.0 - abs(alpha)) * noise
-        return score
+        # weights
+        gamma = epoch / num_epochs
+        if gamma < self.easy_end: # Easy phase: saliency weight = min_w -> 0
+            alpha = (1 - (gamma / self.easy_end)) * self.min_w
+        elif gamma < self.hard_start: # Random phase: saliency weight = 0
+            alpha = 0.0
+        else: # Hard phase: saliency weight = 0 -> max_w
+            alpha = ((gamma - self.hard_start) / (1.0 - self.hard_start)) * self.max_w
+        
+        return alpha * saliency + (1.0 - abs(alpha)) * noise
 
     def get_normalized_saliency(self, imgs):
         """Extracts and normalizes saliency to [0, 1] range."""
-        saliency = self.saliency_fn(imgs)
+        saliency = self.saliency_extractor(imgs)
         
         # Min-Max Normalization per sample
         s_flat = saliency.view(saliency.shape[0], -1)
@@ -53,12 +61,17 @@ class CurriculumMasker(nn.Module, Masker):
         normalized = (saliency - s_min) / (s_max - s_min + 1e-6)
         return normalized
 
-    def forward(self, x, mask_ratio=0.75, **kwargs):
-        B, N, D = x.shape
-        imgs = kwargs.pop('imgs', x)
+    def forward(self, x, mask_ratio=0.75, phase="curriculum", raw_imgs=None, **kwargs):
+        if phase == "curriculum":
+            if raw_imgs is None:
+                raise ValueError("raw_imgs must be provided for CurriculumMasker in curriculum phase")
+
+            saliency = self.get_normalized_saliency(raw_imgs).flatten(1) # (B, N)
+            scores = self.compute_masking_score(saliency, self.epoch, self.num_epochs)
         
-        saliency = self.get_normalized_saliency(imgs).flatten(1) # (B, N)
-        scores = self.compute_masking_score(saliency, self.epoch, self.num_epochs)
+        else: # val: random masking
+            B, N, D = x.shape
+            scores = torch.rand(B, N, device=x.device)
         
         return Masker.__call__(self, x, mask_ratio, scores, **kwargs)
 
@@ -71,17 +84,17 @@ if __name__ == "__main__":
     saliency = torch.tensor([[0.1, 0.9, 0.2, 0.8], [0.5, 0.5, 0.5, 0.5]])
     
     # Use a lambda to return the mock saliency
-    masking = CurriculumMasker(saliency_fn=lambda _: saliency, num_epochs=10)
+    masking = CurriculumMasker(saliency_extractor=lambda _: saliency, num_epochs=10)
     
     # Test batch 0 saliency: [0.1, 0.9, 0.2, 0.8]
     masking.set_epoch(0)
-    _, _, ids_keep, _ = masking(x, mask_ratio=0.5)
+    _, _, ids_keep, _ = masking(x, mask_ratio=0.5, raw_imgs=x)
     print(f"Epoch 0  (Easy) - Keep indices (expected 1, 3): {ids_keep[0].tolist()}")
 
     masking.set_epoch(5)
-    _, _, ids_keep, _ = masking(x, mask_ratio=0.5)
+    _, _, ids_keep, _ = masking(x, mask_ratio=0.5, raw_imgs=x)
     print(f"Epoch 5  (Rand) - Keep indices: {ids_keep[0].tolist()}")
 
     masking.set_epoch(10)
-    _, _, ids_keep, _ = masking(x, mask_ratio=0.5)
+    _, _, ids_keep, _ = masking(x, mask_ratio=0.5, raw_imgs=x)
     print(f"Epoch 10 (Hard) - Keep indices (expected 0, 2): {ids_keep[0].tolist()}")

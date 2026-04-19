@@ -107,6 +107,7 @@ class HOGSaliency(HOGLayer):
         # enforce normalize=False as otherwise noisy features get highest saliency, instead of clean edges
         super().__init__(nbins, pool, in_channels, use_max_gradient=False, gaussian_window=None, normalize=False)
 
+    @torch.no_grad()
     def forward(self, x):
         # x: (B, C, H, W)
         hog_features_grid = super().forward(x) # (B, C, nbins, h_grid, w_grid)
@@ -134,18 +135,10 @@ class NDILayer(nn.Module):
 
     (to be computed on the original radiometric values, not on the normalized ones !)
     """
-    def __init__(self, bands, bands_mean=None, bands_std=None):
+    def __init__(self, bands):
         super().__init__()
         self.bands = bands
         
-        # Denormalization for NDI computation (which requires raw reflectances)
-        if bands_mean is not None and bands_std is not None:
-            self.register_buffer("denorm_mean", torch.tensor(bands_mean, dtype=torch.float32).view(-1, 1, 1))
-            self.register_buffer("denorm_std",  torch.tensor(bands_std,  dtype=torch.float32).view(-1, 1, 1))
-        else:
-            self.denorm_mean = None
-            self.denorm_std = None
-
         try:
             self.nir_idx = bands.index("B08")
             self.red_idx = bands.index("B04")
@@ -156,9 +149,7 @@ class NDILayer(nn.Module):
 
     @torch.no_grad()
     def forward(self, x):
-        # x: [B, C, H, W]
-        if self.denorm_mean is not None and self.denorm_std is not None:
-            x = x * self.denorm_std + self.denorm_mean
+        # x: [B, C, H, W] should have raw values (not normalized)
             
         nir = x[:, self.nir_idx:self.nir_idx+1]
         red = x[:, self.red_idx:self.red_idx+1]
@@ -178,10 +169,11 @@ class NDISaliency(NDILayer):
     Saliency extractor based on NDI indices.
     Calculates Coefficient of Variation (std / abs_mean) for each patch
     """
-    def __init__(self, patch_size, bands, bands_mean=None, bands_std=None):
-        super().__init__(bands, bands_mean=bands_mean, bands_std=bands_std)
+    def __init__(self, patch_size, bands):
+        super().__init__(bands)
         self.patch_size = patch_size
 
+    @torch.no_grad()
     def forward(self, x):
         ndi_features = super().forward(x)  # (B, 3, H, W)
         

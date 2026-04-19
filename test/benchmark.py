@@ -18,8 +18,12 @@ from models.segmentation.segmentation_vit import SegmentationViT
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
 from utils.spatial_ops import windowed_inference, windowed_evaluation
 from utils.utils import get_checkpoint_path, save_results
-from utils.visualization import quant_norm, get_color_tensor, plot_images, prepare_segmentation_visuals
+from utils.visualization import plot_images, prepare_segmentation_visuals
 
+batch_size = 128
+num_workers = 4
+prefetch_factor = 2
+artifacts_dir = "/mnt/ssd/trained_models/"
 
 class EvaluationDataset(torch.utils.data.Dataset):
     def __init__(self, ds):
@@ -31,7 +35,7 @@ class EvaluationDataset(torch.utils.data.Dataset):
         return self.ds.ids[idx], img, mask
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="test")
+@hydra.main(version_base="1.3", config_path="../configs", config_name="finetune")
 def main(cfg: DictConfig):
     # Dataset
     test_transform = A.Compose([ToTensorV2()])
@@ -63,23 +67,23 @@ def main(cfg: DictConfig):
 
     # Data
     dataset_cfg = dataset_class_cfg(**cfg.dataset)
-    dataset_kwargs = {**asdict(dataset_cfg), "grid_sampling": False}
     ood_split = cfg.get("ood_split", None)
-    test_ds = dataset_class(**dataset_kwargs, split=ood_split if ood_split else "test", transform=test_transform)
+    test_ds = dataset_class(**{**asdict(dataset_cfg), "grid_sampling": False},
+                            split=ood_split if ood_split else "test", transform=test_transform)
     logging.info(f"Test set size: [{len(test_ds)}, {tuple(test_ds[0][0].shape)}]")
 
     eval_ds = EvaluationDataset(test_ds)
     test_loader = DataLoader(
         eval_ds,
-        batch_size=cfg.batch_size,
+        batch_size=batch_size,
         shuffle=False,
-        num_workers=cfg.num_workers,
-        prefetch_factor=cfg.prefetch_factor,
-        persistent_workers=cfg.num_workers > 0,
+        num_workers=num_workers,
+        prefetch_factor=prefetch_factor,
+        persistent_workers=num_workers > 0,
         pin_memory=True)
 
     # Cache Check
-    cache_dir = Path(cfg.artifacts_dir) / cfg.experiment_name / (cfg.dataset_name + ("_" + ood_split if ood_split else ""))
+    cache_dir = Path(artifacts_dir) / "results" / cfg.experiment_name / (cfg.dataset_name + ("_" + ood_split if ood_split else ""))
     use_cache = cache_dir.exists() and any(p.suffix == ".pt" for p in cache_dir.iterdir())
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -95,7 +99,7 @@ def main(cfg: DictConfig):
         model = SegmentationViT(**asdict(model_cfg))
 
         # Checkpoint
-        ckpt_path = get_checkpoint_path(cfg.experiment_name, cfg.dataset_name, cfg.artifacts_dir)
+        ckpt_path = get_checkpoint_path(cfg.experiment_name, cfg.dataset_name, artifacts_dir)
         try:
             state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
             state_dict = state.get("state_dict", state)
@@ -144,7 +148,7 @@ def main(cfg: DictConfig):
                                                 window_size=input_size,
                                                 stride=input_size // 2,
                                                 num_classes=num_classes,
-                                                batch_size=cfg.batch_size,
+                                                batch_size=batch_size,
                                                 merger_device='cpu')
                         preds_list.append(pred)
                     preds = torch.stack(preds_list, dim=0) # (B, C, H, W) on CPU
@@ -163,7 +167,7 @@ def main(cfg: DictConfig):
                 batch_loss_tensor = windowed_evaluation(preds=preds, # on CPU
                                                         masks=masks,
                                                         input_size=input_size,
-                                                        batch_size=cfg.batch_size,
+                                                        batch_size=batch_size,
                                                         loss_fn=loss_fn,
                                                         torchmetrics=[acc, iou, f1])
                 batch_loss = batch_loss_tensor.item() if batch_loss_tensor is not None else 0.0

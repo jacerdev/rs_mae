@@ -58,7 +58,7 @@ class MAEModule(L.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio)
+        loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio, phase="val")
         
         if len(extra_losses) > 1:
             self.log("val_hog_loss", extra_losses[0], on_epoch=True, sync_dist=True)
@@ -106,10 +106,15 @@ class MAEModule(L.LightningModule):
         imgs, pred, mask = outputs["imgs"].detach(), outputs["pred"].detach(), outputs["mask"].detach() 
         B, _, H, W = imgs.shape
 
+        raw_imgs = imgs.clone()
+        if self.model.normalize:
+            imgs = (imgs - self.model.mean) / self.model.std
+        imgs = torch.nan_to_num(imgs, nan=0.0)
+
         # select random samples
         num_samples = min(B, 5)
         indices = torch.randperm(B, generator=torch.Generator().manual_seed(self.current_epoch % 5))[:num_samples]
-        imgs, pred, mask = imgs[indices], pred[indices], mask[indices]
+        imgs, raw_imgs, pred, mask = imgs[indices], raw_imgs[indices], pred[indices], mask[indices]
 
         p = self.model.patch_embed.patch_size[0] # square patch
         C = self.model.target.out_features // (p ** 2)
@@ -129,10 +134,9 @@ class MAEModule(L.LightningModule):
         recon_raw = target * (1 - mask_expanded) + recon_raw * mask_expanded
  
         # output restored
-        recon_restored = None
-        if isinstance(self.model.target, NormalizedPixelTarget):
-            pred_restored = self.model.target.restore(pred, imgs=imgs)
-            recon_restored = unpatchify(pred_restored, p, H, W, C)
+        recon_restored = self.model.target.restore(pred, gt_imgs=imgs)
+        if recon_restored is not None:
+            recon_restored = unpatchify(recon_restored, p, H, W, C)
             recon_restored = imgs * (1 - mask_expanded) + recon_restored * mask_expanded
 
         # log
@@ -142,7 +146,7 @@ class MAEModule(L.LightningModule):
 
         for name, bands_idx in band_indices.items():
             if hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker":
-                saliency = self.model.masker.saliency_fn(imgs).detach()
+                saliency = self.model.masker.saliency_extractor(raw_imgs).detach()
                 saliency_grid_tensors = []
                 for i in range(num_samples):
                     s_overlay = generate_saliency_grid(saliency[i], image=quant_norm(imgs[i:i+1, bands_idx, :, :])[0].permute(1, 2, 0).cpu().numpy())
@@ -168,18 +172,23 @@ class MAEModule(L.LightningModule):
         imgs, pred, mask = outputs["imgs"].detach(), outputs["pred"].detach(), outputs["mask"].detach()
         B, _, H, W = imgs.shape
 
+        raw_imgs = imgs.clone()
+        if getattr(self.model, "normalize", False):
+            imgs = (imgs - self.model.mean) / self.model.std
+        imgs = torch.nan_to_num(imgs, nan=0.0)
+
         num_samples = min(B, 5)
         indices = torch.randperm(B, generator=torch.Generator().manual_seed(self.current_epoch % 5))[:num_samples]
-        imgs, pred, mask = imgs[indices], pred[indices], mask[indices]
+        imgs, raw_imgs, pred, mask = imgs[indices], raw_imgs[indices], pred[indices], mask[indices]
         
         p = self.model.patch_embed.patch_size[0]
         h, w = H // p, W // p
 
         mask_expanded = mask.reshape(num_samples, h, w).repeat_interleave(p, dim=1).repeat_interleave(p, dim=2).unsqueeze(1)  # (num_samples, 1, H, W)
-       
+        
         # target
-        hog_target, ndi_target = [t.detach() for t in self.model.target(imgs)]
-        hog_target, ndi_target = self.model.target.restore(torch.cat([hog_target, ndi_target], dim=-1), imgs=imgs)
+        hog_target, ndi_target = [t.detach() for t in self.model.target(imgs, raw_imgs=raw_imgs)]
+        hog_target, ndi_target = self.model.target.restore(torch.cat([hog_target, ndi_target], dim=-1), gt_imgs=raw_imgs)
         ndi_target = unpatchify(ndi_target, p, H, W, HOGNDITarget.NDI_CHANNELS)
         
         pool = self.model.target.hog.pool
@@ -189,7 +198,7 @@ class MAEModule(L.LightningModule):
         hog_target = hog_target.reshape(num_samples, -1, nbins, h*n, w*n) # (num_samples, C, nbins, hn, wn)
 
         # output
-        hog_pred, ndi_pred = self.model.target.restore(pred, imgs=imgs)
+        hog_pred, ndi_pred = self.model.target.restore(pred, gt_imgs=raw_imgs)
         ndi_recon = unpatchify(ndi_pred, p, H, W, HOGNDITarget.NDI_CHANNELS)
         ndi_recon = ndi_target * (1 - mask_expanded) + ndi_recon * mask_expanded
 

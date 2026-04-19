@@ -19,7 +19,7 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 	NDI_CHANNELS = 3  # NDVI, NDWI, NDBI
 
 	def __init__(self, patch_size, bands, pool, nbins=9, use_max_gradient=False, gaussian_window=None,
-				 normalize=True, bands_mean=None, bands_std=None, norm_pix=True, **kwargs):
+				 normalize=True, norm_pix=True, **kwargs):
 		nn.Module.__init__(self)
 
 		assert patch_size % pool == 0, "patch_size must be divisible by pool"
@@ -41,14 +41,16 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 		#self.register_buffer("denorm_mean", torch.tensor(bands_mean, dtype=torch.float32).view(-1, 1, 1))
 		#self.register_buffer("denorm_std",  torch.tensor(bands_std,  dtype=torch.float32).view(-1, 1, 1))
 
-		self.ndi = NDILayer(bands=bands, bands_mean=bands_mean, bands_std=bands_std)
+		self.ndi = NDILayer(bands=bands)
 
-	def forward(self, imgs):
+	def forward(self, imgs, **kwargs):
 		"""
-		imgs   : (B, C, H, W) multispectral batch
+		raw_imgs : (B, C, H, W) passed via kwargs
 		returns: Tuple of (hog_tokens, ndi_tokens)
 		"""
-		hog_tokens, ndi_tokens = self._get_raw_targets(imgs)
+		raw_imgs = kwargs["raw_imgs"]
+		hog_tokens = self._get_raw_hog_targets(raw_imgs)
+		ndi_tokens = self._get_raw_ndi_targets(raw_imgs)
 
 		# Apply per-patch Z-score normalization if enabled
 		if self.norm_pix:
@@ -64,21 +66,18 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 		
 		# Reverse the Z-score normalization using the original image statistics
 		if self.norm_pix:
-			imgs = kwargs.get("imgs")
-			if imgs is None:
-				raise ValueError("imgs must be provided in kwargs to restore normalized predictions.")
-			
 			# Recalculate raw targets to extract their original mean and variance
-			raw_hog, raw_ndi = self._get_raw_targets(imgs)
+			raw_imgs = kwargs["gt_imgs"]
+			raw_hog = self._get_raw_hog_targets(raw_imgs)
+			raw_ndi = self._get_raw_ndi_targets(raw_imgs)
 
 			hog_pred = z_denormalize(hog_pred, raw_hog)
 			ndi_pred = z_denormalize(ndi_pred, raw_ndi)
             
 		return hog_pred, ndi_pred
 
-	def _get_raw_targets(self, imgs):
-		"""Helper method to generate un-normalized features"""
-		# HOG
+	def _get_raw_hog_targets(self, imgs):
+		"""Helper method to generate un-normalized HOG features"""
 		hog_grid = self.hog(imgs)
 		B, C, nb, hn, wn = hog_grid.shape
 		n = self.patch_size // self.pool
@@ -88,11 +87,10 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 		#hog_tokens = hog_tokens.reshape(B, h * w, C * n * n * nb)
 		hog_tokens = hog_tokens.permute(0, 3, 5, 1, 2, 4, 6)
 		hog_tokens = hog_tokens.reshape(B, h * w, C * nb * n * n)
+		return hog_tokens # [B, N, C*n²*nb]
 
-		# NDI
-		#if self.denorm_mean is not None and self.denorm_std is not None:
-			#imgs = imgs * self.denorm_std + self.denorm_mean 
-		ndi_img = self.ndi(imgs)
+	def _get_raw_ndi_targets(self, raw_imgs):
+		"""Helper method to generate NDI features using raw images"""
+		ndi_img = self.ndi(raw_imgs)
 		ndi_tokens = patchify(ndi_img, self.patch_size) 
-
-		return hog_tokens, ndi_tokens # ([B, N, C*n²*nb], [B, N, p²*3])
+		return ndi_tokens # [B, N, p²*3]

@@ -21,10 +21,10 @@ base_lr: 3e-4
 
 weight_decay: 0.05
 gradient_clip_val: 1.0
-precision: "16-mixed"
+precision: "bf16-mixed"
 
 # Hardware
-num_workers: 28
+num_workers: 26
 prefetch_factor: 4
 
 ### Logging ###
@@ -59,6 +59,9 @@ model:
     _target_: torch.nn.LayerNorm
     _partial_: true
     eps: 1e-6
+    
+  normalize: true
+  bands: ${bands}
 
 ### Data ###
 dataset:
@@ -67,7 +70,7 @@ dataset:
   split_file: "datasets/splits/reben.parquet"
   align_size: 120
   bands: ${bands}
-  normalize: true
+  normalize: false
 
   val_to_train_frac: 0.85
   test_to_train_frac: 1.0

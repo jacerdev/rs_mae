@@ -3,6 +3,10 @@ experiment_name: "curriculum_ndi"
 
 masker:
   _target_: models.strategies.masker.CurriculumMasker
+  easy_end: 0.1
+  hard_start: 0.5
+  min_w: -0.5
+  max_w: 0.7
 
 saliency_extractor:
   _target_: utils.features.NDISaliency

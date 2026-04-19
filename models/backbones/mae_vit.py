@@ -24,10 +24,19 @@ class MaskedAutoencoderViT(nn.Module):
                  masker=None, target=None, loss=None,
                  cls_token=True,
                  drop_path_rate=0., # vit-s 0.0, vit-b 0.1
-                 use_decoder=True):
+                 use_decoder=True,
+                 normalize=False, bands=None):
         super().__init__()
         
         self.use_decoder = use_decoder
+        self.normalize = normalize
+        
+        if self.normalize:
+            from datasets.reben import ReBENDataset
+            mean_tensor = torch.tensor([ReBENDataset.BAND_STATS["mean"][b] for b in bands], dtype=torch.float32)
+            std_tensor = torch.tensor([ReBENDataset.BAND_STATS["std"][b] for b in bands], dtype=torch.float32)
+            self.register_buffer("mean", mean_tensor.view(1, -1, 1, 1), persistent=False)
+            self.register_buffer("std", std_tensor.view(1, -1, 1, 1), persistent=False)
 
         # Encoder
         # Patch Embed -> Add CLS & Pos Embed -> Self-Attention Blocks -> Layer Norm
@@ -88,12 +97,11 @@ class MaskedAutoencoderViT(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def forward_encoder(self, x, mask_ratio):
-        imgs = x
+    def forward_encoder(self, x, mask_ratio, **kwargs):
         x = self.patch_embed(x)
         
         if self.use_decoder and mask_ratio > 0:
-            x, mask, ids_keep, ids_restore = self.masker(x, mask_ratio, imgs=imgs) # pass imgs for saliency-based masking
+            x, mask, ids_keep, ids_restore = self.masker(x, mask_ratio, **kwargs) # pass kwargs for saliency-based masking
         else:
             B, N, D = x.shape
             ids_keep = None # passing None makes SineCosinePosEmbedding bypass gather
@@ -136,18 +144,23 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x
 
-    def forward_loss(self, imgs, pred, mask, latent=None):
+    def forward_loss(self, imgs, pred, mask, **kwargs):
         """
         imgs: [B, C_in, H, W]
         pred: [B, N, p*p*C_out]
         mask: [B, N], 0 is keep, 1 is remove,
         """
-        target = self.target(imgs)
-        return self.loss(pred, target, mask, latent=latent)
+        target = self.target(imgs, **kwargs)
+        return self.loss(pred, target, mask, **kwargs)
 
-    def forward(self, imgs, mask_ratio=0.75):
-        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+    def forward(self, imgs, mask_ratio=0.75, **kwargs):
+        raw_imgs = imgs
+        if self.normalize:
+            imgs = (imgs - self.mean) / self.std
+        imgs = torch.nan_to_num(imgs, nan=0.0)
+
+        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, raw_imgs=raw_imgs, **kwargs)
         pred = self.forward_decoder(latent, ids_restore)
         
-        loss, extra_losses = self.forward_loss(imgs, pred, mask, latent=latent)
+        loss, extra_losses = self.forward_loss(imgs, pred, mask, latent=latent, raw_imgs=raw_imgs)
         return loss, pred, mask, extra_losses
