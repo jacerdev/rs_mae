@@ -138,6 +138,8 @@ def main(cfg: DictConfig):
     # Train
     exit_code = 1
     try:
+        # re-seed before training to ensure deterministic sample order regardless of model initialization
+        L.seed_everything(cfg.seed, workers=True)
         trainer.fit(model, datamodule=data_module, ckpt_path=resume_path)
         exit_code = 0
     finally:

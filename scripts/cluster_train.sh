@@ -2,10 +2,10 @@
 #SBATCH --job-name=rs_mae_train
 
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=128G
+#SBATCH --mem=64G
 #SBATCH --cpus-per-gpu=30
 #SBATCH --partition=gpu_short
-#SBATCH --time=1-00:00:00
+#SBATCH --time=0-08:00:00
 
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=aloui@campus.tu-berlin.de
