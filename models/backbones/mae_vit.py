@@ -157,7 +157,7 @@ class MaskedAutoencoderViT(nn.Module):
         raw_imgs = imgs
         if self.normalize:
             imgs = (imgs - self.mean) / self.std
-        imgs = torch.nan_to_num(imgs, nan=0.0)
+            imgs = torch.nan_to_num(imgs, nan=0.0)
 
         latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, raw_imgs=raw_imgs, **kwargs)
         pred = self.forward_decoder(latent, ids_restore)

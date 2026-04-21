@@ -245,7 +245,7 @@ class ReBENDataset(Dataset):
 
         if self.normalize:
             image = (image - self.mean) / self.std
-        #image = torch.nan_to_num(image, nan=0.0)
+            image = torch.nan_to_num(image, nan=0.0)
         
         return (image, mask) if self.return_mask else image
 
