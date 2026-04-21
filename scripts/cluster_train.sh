@@ -2,7 +2,7 @@
 #SBATCH --job-name=rs_mae_train
 
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=80G
+#SBATCH --mem=230G
 #SBATCH --cpus-per-gpu=30
 #SBATCH --partition=gpu_short
 #SBATCH --time=0-12:00:00
@@ -30,7 +30,7 @@ if [ ! -d "$LOCAL_RAM/BigEarthNet-S2_lmdb" ]; then
     echo "[LOG] Copying dataset to RAM Disk ($LOCAL_RAM)..."
     mkdir -p "$LOCAL_RAM"
     # Copy LMDB. This might take 2-5 minutes from network storage
-    cp -r "$REMOTE_DATA" "$LOCAL_RAM/"
+    rsync -ah "$REMOTE_DATA" "$LOCAL_RAM/"
     echo "[LOG] Dataset copied successfully."
 else
     echo "[LOG] Dataset already present in RAM Disk."
