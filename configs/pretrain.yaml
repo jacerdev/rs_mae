@@ -5,7 +5,8 @@ in_chans: 10 # = num_bands
 bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
 patch_size: 8
 mask_ratio: 0.75
-pretrained_ckpt_export_path: best_pretrained_ckpt.txt
+
+ckpt_export_path: best_ckpt.txt
 
 defaults:
   - _self_

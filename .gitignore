@@ -2,7 +2,7 @@
 __pycache__/
 
 # Files
-/best_pretrained_ckpt.txt
+/best_ckpt.txt
 /todos.txt
 context.md
 

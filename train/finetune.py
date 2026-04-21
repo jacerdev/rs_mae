@@ -91,8 +91,8 @@ def main(cfg: DictConfig):
         bands=cfg.dataset.bands, dataset_name=cfg.dataset_name)
 
     # Callbacks
-    checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=3, every_n_epochs=1,
-                                          filename="seg-{epoch:02d}-{val_loss:.4f}", save_last=True)
+    checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_last=True, save_top_k=2,
+                                          filename="seg-{epoch:02d}-{val_loss:.4f}")
     lr_monitor = LearningRateMonitor(logging_interval='step')
     early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=cfg.early_stop_patience)
     
@@ -129,8 +129,8 @@ def main(cfg: DictConfig):
             logging.info(f"No last checkpoint found at {last_ckpt_path}")
 
     # Pretrained MAE weights
-    elif cfg.pretrained_ckpt_export_path:
-        actual_path = cfg.pretrained_ckpt_export_path
+    elif cfg.ckpt_export_path:
+        actual_path = cfg.ckpt_export_path
         if actual_path.endswith(".txt"):
             logging.info(f"Reading checkpoint path from text file: {actual_path}")
             with open(actual_path, "r") as f:

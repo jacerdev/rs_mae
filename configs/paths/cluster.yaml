@@ -1,4 +1,4 @@
-reben_dir:             "/scratch/jacer/datasets/reben/BigEarthNet-S2_lmdb/"
+reben_dir:             "/scratch/jacer/datasets/reben/BigEarthNet-S2_lmdb_interpolated/"
 reben_keys:            "/scratch/jacer/datasets/reben/keys.pkl"
 
 sen1floods11_dir:      "/scratch/jacer/datasets/sen1floods11/"

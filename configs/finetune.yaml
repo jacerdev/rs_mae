@@ -1,7 +1,8 @@
 # Global variables
 seed: 42
 patch_size: 8 # img_size must be divisible by `2*patch_size` for the FPN segmentation head
-pretrained_ckpt_export_path: best_pretrained_ckpt.txt
+
+ckpt_export_path: best_ckpt.txt
 
 defaults:
   - _self_

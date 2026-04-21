@@ -74,8 +74,12 @@ def main(cfg: DictConfig):
         bands=cfg.bands)
 
     # Callbacks
-    checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=3, every_n_epochs=1,
-                                          filename="mae-{epoch:02d}-{val_loss:.4f}", save_last=True)
+    if cfg.get("use_last_ckpt", False):
+        checkpoint_callback = ModelCheckpoint(monitor=None, save_last=True,
+                                            filename="mae-{epoch:02d}-{val_loss:.4f}")
+    else:
+        checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_last=True, save_top_k=2,
+                                            filename="mae-{epoch:02d}-{val_loss:.4f}")
     lr_monitor = LearningRateMonitor(logging_interval='step')
 
     # Trainer
@@ -112,11 +116,11 @@ def main(cfg: DictConfig):
         trainer.fit(model, datamodule=data_module, ckpt_path=resume_path)
             
         # Export the best checkpoint path
-        if getattr(checkpoint_callback, "best_model_path", None):
-            export_path = cfg.pretrained_ckpt_export_path
-            logging.info(f"Exporting best model path to {export_path}: {checkpoint_callback.best_model_path}")
-            with open(export_path, "w") as f:
-                f.write(checkpoint_callback.best_model_path)
+        best_model_path = checkpoint_callback.best_model_path
+        #if cfg.last_ckpt: best_model_path = checkpoint_callback.last_model_path
+        logging.info(f"Exporting best model path to {cfg.ckpt_export_path}: {best_model_path}")
+        with open(cfg.ckpt_export_path, "w") as f:
+            f.write(best_model_path)
         exit_code = 0
     finally:
         wandb.finish(exit_code=exit_code)
