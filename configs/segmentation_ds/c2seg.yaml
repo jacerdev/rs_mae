@@ -8,7 +8,7 @@ num_bands: 4
 # Data
 dataset:
   data_dir: ${paths.c2seg_dir}
-  city: "augsburg"
+  city: "beijing"
   split_frac: 0.85
   bands: ["B02", "B03", "B04", "B08"]
   normalize: false

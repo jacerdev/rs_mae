@@ -74,7 +74,7 @@ def main(cfg: DictConfig):
         bands=cfg.bands)
 
     # Callbacks
-    checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=3,
+    checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=3, every_n_epochs=1,
                                           filename="mae-{epoch:02d}-{val_loss:.4f}", save_last=True)
     lr_monitor = LearningRateMonitor(logging_interval='step')
 

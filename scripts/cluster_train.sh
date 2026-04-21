@@ -2,8 +2,8 @@
 #SBATCH --job-name=rs_mae_train
 
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=64G
-#SBATCH --cpus-per-gpu=30
+#SBATCH --mem=80G
+#SBATCH --cpus-per-gpu=20
 #SBATCH --partition=gpu_short
 #SBATCH --time=0-12:00:00
 
@@ -23,7 +23,7 @@ mkdir -p '/scratch/jacer/outputs/training_out/' # Specified in configs/paths/clu
 set -e # Strict processing instructions
 
 # Environment activation
-export MAMBA_EXE='/home/users/j/jacer/myPrograms/mamba/micromamba'
+export MAMBA_EXE='/home/users/j/jacer/programs/micromamba'
 export MAMBA_ROOT_PREFIX='/home/users/j/jacer/.local/share/mamba'
 eval "$("$MAMBA_EXE" shell hook --shell bash)"
 micromamba activate /scratch/jacer/envs/rs_mae

@@ -14,7 +14,7 @@ mkdir -p "$CLOUD_PREFIX/outputs/training_out/" # Specified in configs/paths/clou
 set -e # Strict processing instructions
 
 # Environment activation
-export MAMBA_EXE="$CLOUD_PREFIX/myPrograms/mamba/micromamba"
+export MAMBA_EXE="$CLOUD_PREFIX/programs/micromamba/bin/micromamba"
 #export MAMBA_ROOT_PREFIX="$CLOUD_PREFIX/envs"
 eval "$("$MAMBA_EXE" shell hook --shell bash)"
 micromamba activate "$CLOUD_PREFIX/envs/rs_mae"
@@ -43,21 +43,21 @@ echo "--------------------------------------------------"
 send_telegram "📌 Pretrained checkpoint [$(date "+%Y-%m-%d %H:%M:%S")]"
 echo "--------------------------------------------------"
 send_telegram "🚀 Finetuning 1: reben_7k"
-python -m train.finetune "$@" experiment_name="$experiment" paths=cloud paths.cloud_prefix="$CLOUD_PREFIX" segmentation_ds=reben_7k &
+python -m train.finetune "$@" experiment_name="$experiment" paths=cloud paths.cloud_prefix="$CLOUD_PREFIX" num_workers=2 prefetch_factor=2 segmentation_ds=reben_7k &
 child_pid=$!
 wait "$child_pid"
 echo "--------------------------------------------------"
 send_telegram "🚀 Finetuning 2: sen1floods11"
-python -m train.finetune "$@" experiment_name="$experiment" paths=cloud paths.cloud_prefix="$CLOUD_PREFIX" segmentation_ds=sen1floods11 &
+python -m train.finetune "$@" experiment_name="$experiment" paths=cloud paths.cloud_prefix="$CLOUD_PREFIX" num_workers=2 prefetch_factor=2 segmentation_ds=sen1floods11 &
 child_pid=$!
 wait "$child_pid"
 echo "--------------------------------------------------"
 send_telegram "🚀 Finetuning 3: cashew_plantation"
-python -m train.finetune "$@" experiment_name="$experiment" paths=cloud paths.cloud_prefix="$CLOUD_PREFIX" segmentation_ds=cashew_plantation &
+python -m train.finetune "$@" experiment_name="$experiment" paths=cloud paths.cloud_prefix="$CLOUD_PREFIX" num_workers=2 prefetch_factor=2 segmentation_ds=cashew_plantation &
 child_pid=$!
 wait "$child_pid"
 echo "--------------------------------------------------"
 send_telegram "🚀 Finetuning 4: c2seg"
-python -m train.finetune "$@" experiment_name="$experiment" paths=cloud paths.cloud_prefix="$CLOUD_PREFIX" segmentation_ds=c2seg &
+python -m train.finetune "$@" experiment_name="$experiment" paths=cloud paths.cloud_prefix="$CLOUD_PREFIX" num_workers=2 prefetch_factor=2 segmentation_ds=c2seg &
 child_pid=$!
 wait "$child_pid"

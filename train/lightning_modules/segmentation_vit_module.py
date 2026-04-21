@@ -42,13 +42,13 @@ class SegmentationViTModule(L.LightningModule):
         self.model = SegmentationViT(**asdict(self.model_cfg))
 
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
-        self.train_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
+        #self.train_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
         self.val_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
         
-        self.train_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
+        #self.train_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
         self.val_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
         
-        self.train_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
+        #self.train_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
         self.val_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
 
     def forward(self, x):
@@ -65,13 +65,13 @@ class SegmentationViTModule(L.LightningModule):
         masks = masks.long()
         
         loss = self.loss_fn(preds, masks)
-        self.train_acc(preds, masks)
-        self.train_iou(preds, masks)
-        self.train_f1(preds, masks)
+        #self.train_acc(preds, masks)
+        #self.train_iou(preds, masks)
+        #self.train_f1(preds, masks)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("train_iou", self.train_iou, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
-        self.log("train_f1", self.train_f1, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        #self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        #self.log("train_iou", self.train_iou, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        #self.log("train_f1", self.train_f1, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
         
         if batch_idx == 0:
             self._log_predictions({"imgs": imgs, "preds": preds, "masks": masks}, "train")

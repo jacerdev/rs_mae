@@ -20,10 +20,10 @@ early_stop_patience: 15
 
 weight_decay: 0.05
 gradient_clip_val: 1.0
-precision: "bf16-mixed"
+precision: "16-mixed"
 
 # Hardware
-num_workers: 26
+num_workers: 8
 prefetch_factor: 4
 
 # Logging

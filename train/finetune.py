@@ -91,10 +91,16 @@ def main(cfg: DictConfig):
         bands=cfg.dataset.bands, dataset_name=cfg.dataset_name)
 
     # Callbacks
-    checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=3,
+    checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=3, every_n_epochs=1,
                                           filename="seg-{epoch:02d}-{val_loss:.4f}", save_last=True)
     lr_monitor = LearningRateMonitor(logging_interval='step')
     early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=cfg.early_stop_patience)
+    
+    callbacks = [checkpoint_callback, lr_monitor, early_stopping]
+    if Path("/content/drive/My Drive").exists():
+        from utils.utils import CheckpointSyncCallback
+        checkpoints_dir = Path(cfg.wandb.outdir) / cfg.wandb.project
+        callbacks.append(CheckpointSyncCallback(checkpoints_dir))
 
     # Trainer
     trainer = L.Trainer(
@@ -104,7 +110,7 @@ def main(cfg: DictConfig):
         devices="auto",
         strategy="ddp" if torch.cuda.device_count() > 1 else "auto",
         logger=wandb_logger,
-        callbacks=[checkpoint_callback, lr_monitor, early_stopping],
+        callbacks=callbacks,
         plugins=[AsyncCheckpointIO()],
         precision=cfg.precision,
         log_every_n_steps=cfg.log_every_n_steps,
