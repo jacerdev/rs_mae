@@ -22,6 +22,20 @@ mkdir -p '/scratch/jacer/outputs/training_out/' # Specified in configs/paths/clu
 
 set -e # Strict processing instructions
 
+# --- DATA PREPARATION (RAM DISK) ---
+LOCAL_RAM="/dev/shm/jacer/datasets/reben"
+REMOTE_DATA="/scratch/jacer/datasets/reben/BigEarthNet-S2_lmdb/"
+
+if [ ! -d "$LOCAL_RAM/BigEarthNet-S2_lmdb" ]; then
+    echo "[LOG] Copying dataset to RAM Disk ($LOCAL_RAM)..."
+    mkdir -p "$LOCAL_RAM"
+    # Copy LMDB. This might take 2-5 minutes from network storage
+    cp -r "$REMOTE_DATA" "$LOCAL_RAM/"
+    echo "[LOG] Dataset copied successfully."
+else
+    echo "[LOG] Dataset already present in RAM Disk."
+fi
+
 # Environment activation
 export MAMBA_EXE='/home/users/j/jacer/programs/micromamba'
 export MAMBA_ROOT_PREFIX='/home/users/j/jacer/.local/share/mamba'
