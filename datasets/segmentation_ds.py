@@ -94,7 +94,7 @@ class SegmentationDataset(Dataset):
 
         if self.normalize:
             img = (img - self.mean) / self.std
-        #img = torch.nan_to_num(img, nan=0.0)
+        #img = torch.nan_to_num(img, nan=0.0)###################
         
         return img, mask
 

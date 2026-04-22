@@ -139,7 +139,7 @@ def main(cfg: DictConfig):
         load_pretrained_encoder_weights(model.model, actual_path, bands=cfg.dataset.bands)
 
     else:
-        logging.warning("Training from scratch ?!")
+        raise ValueError("Training from scratch ?!")
 
     # Train
     exit_code = 1

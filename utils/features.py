@@ -92,9 +92,9 @@ class HOGLayer(nn.Module):
         hist = hist.unfold(4, self.pool, self.pool)
         pooled = hist.sum(dim=[-1, -2])
 
-        # normalize over bins
+        # normalize over bins per grid cell
         if self.normalize:
-            pooled = F.normalize(pooled, p=2, dim=2)
+            pooled = F.normalize(pooled, p=2, dim=2, eps=1e-6)
         
         return pooled # (B, out_channels, nbins, h, w)
     

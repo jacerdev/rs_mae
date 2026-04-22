@@ -49,13 +49,13 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 		returns: Tuple of (hog_tokens, ndi_tokens)
 		"""
 		raw_imgs = kwargs["raw_imgs"]
-		hog_tokens = self._get_raw_hog_targets(raw_imgs)
+		hog_tokens = self._get_raw_hog_targets(imgs) # or raw_imgs, matters only for precision (when using float16..)
 		ndi_tokens = self._get_raw_ndi_targets(raw_imgs)
 
 		# Apply per-patch Z-score normalization if enabled
 		if self.norm_pix:
-			hog_tokens = z_normalize(hog_tokens)
-			ndi_tokens = z_normalize(ndi_tokens)
+			hog_tokens = z_normalize(hog_tokens) # meaningless for HOG
+			ndi_tokens = z_normalize(ndi_tokens) # probably harmful cuz range is already [-1, 1]
 
 		return hog_tokens, ndi_tokens
 

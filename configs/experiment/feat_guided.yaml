@@ -6,7 +6,7 @@ masker:
 
 target:
   _target_: models.strategies.target.HOGNDITarget
-  norm_pix: true
+  norm_pix: false # per patch z normalization (after HOG/NDI computation)
   # NDI
   bands: ${bands}
   # HOG
@@ -15,7 +15,7 @@ target:
   nbins: 9
   use_max_gradient: true
   gaussian_window: null # 14 := grid_size i.e. img_size // patch_size
-  normalize: true
+  normalize: true # per grid cell L2 normalization over bins
 
 loss:
   _target_: models.strategies.loss.MaskedMSELoss
