@@ -5,6 +5,7 @@ __pycache__/
 /best_ckpt.txt
 /todos.txt
 context.md
+reben_profiled.py
 
 # Folders
 /checkpoints/

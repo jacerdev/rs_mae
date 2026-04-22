@@ -29,7 +29,7 @@ REMOTE_DATA="/scratch/jacer/datasets/reben/BigEarthNet-S2_lmdb/"
 if [ ! -d "$LOCAL_RAM/BigEarthNet-S2_lmdb" ]; then
     echo "[LOG] Copying dataset to RAM Disk ($LOCAL_RAM)..."
     mkdir -p "$LOCAL_RAM"
-    # Copy LMDB. This might take 2-5 minutes from network storage
+    # Copy LMDB
     rsync -ah "$REMOTE_DATA" "$LOCAL_RAM/"
     echo "[LOG] Dataset copied successfully."
 else

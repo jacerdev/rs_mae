@@ -1,6 +1,5 @@
 import lmdb
 import logging
-import time
 import pandas as pd
 from pathlib import Path
 import pickle
@@ -197,14 +196,10 @@ class ReBENDataset(Dataset):
             for k, v in ReBENDataset.CLC_TO_LULC.items():
                 self.lut[k] = v
 
-        self._call_count = 0
-        self._prof = {"io": 0.0, "stack": 0.0, "mask": 0.0, "aug": 0.0, "norm": 0.0}
-
     def __len__(self):
         return len(self.keys)
 
     def __getitem__(self, idx):
-        t0 = time.perf_counter()
         if self.env is None: # lazy loading (very important to avoid multiprocessing errors)
              self.env = lmdb.open(self.data_dir, readonly=True, lock=False, readahead=False, meminit=False)
         
@@ -212,7 +207,6 @@ class ReBENDataset(Dataset):
         with self.env.begin(write=False) as txn:
             byte_data = txn.get(key_str.encode('ascii'))
             tensor_dict = load_safetensors(byte_data)
-        t1 = time.perf_counter()
         
         # build image stack
         band_tensors = []
@@ -223,7 +217,6 @@ class ReBENDataset(Dataset):
                         size=self.align_size, mode='bilinear', align_corners=False).squeeze()
             band_tensors.append(t)
         image = torch.stack(band_tensors, dim=0)
-        t2 = time.perf_counter()
 
         # load segmentation mask if requested
         mask = None
@@ -239,7 +232,6 @@ class ReBENDataset(Dataset):
             if mask.shape != self.align_size:
                 mask = torch.nn.functional.interpolate(mask.float().unsqueeze(0).unsqueeze(0),
                             size=self.align_size, mode='nearest').squeeze().long()
-        t3 = time.perf_counter()
 
         # apply transforms
         if self.transform is not None:
@@ -250,25 +242,10 @@ class ReBENDataset(Dataset):
                 image, mask = augmented["image"], augmented["mask"]
             else:
                 image = self.transform(image=image_np)["image"]
-        t4 = time.perf_counter()
 
         if self.normalize:
             image = (image - self.mean) / self.std
             image = torch.nan_to_num(image, nan=0.0)
-        t5 = time.perf_counter()
-        
-        self._prof["io"] += (t1 - t0)
-        self._prof["stack"] += (t2 - t1)
-        self._prof["mask"] += (t3 - t2)
-        self._prof["aug"] += (t4 - t3)
-        self._prof["norm"] += (t5 - t4)
-        self._call_count += 1
-        
-        if self._call_count % 500 == 0:
-            import multiprocessing
-            worker = multiprocessing.current_process().name
-            print(f"[{worker} Prof x500] IO: {self._prof['io']:.2f}s | Stack: {self._prof['stack']:.2f}s | Mask: {self._prof['mask']:.2f}s | Augment: {self._prof['aug']:.2f}s | Norm: {self._prof['norm']:.2f}s", flush=True)
-            self._prof = {k: 0.0 for k in self._prof}
         
         return (image, mask) if self.return_mask else image
 
