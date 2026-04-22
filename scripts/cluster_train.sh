@@ -2,10 +2,10 @@
 #SBATCH --job-name=rs_mae_train
 
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=230G
-#SBATCH --cpus-per-gpu=30
+#SBATCH --mem=80G
+#SBATCH --cpus-per-gpu=24
 #SBATCH --partition=gpu_short
-#SBATCH --time=0-12:00:00
+#SBATCH --time=0-16:00:00
 
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=aloui@campus.tu-berlin.de
@@ -21,20 +21,6 @@ mkdir -p '/scratch/jacer/outputs/slurm/'
 mkdir -p '/scratch/jacer/outputs/training_out/' # Specified in configs/paths/cluster.yaml as wandb_outdir
 
 set -e # Strict processing instructions
-
-# --- DATA PREPARATION (RAM DISK) ---
-LOCAL_RAM="/dev/shm/jacer/datasets/reben"
-REMOTE_DATA="/scratch/jacer/datasets/reben/BigEarthNet-S2_lmdb/"
-
-if [ ! -d "$LOCAL_RAM/BigEarthNet-S2_lmdb" ]; then
-    echo "[LOG] Copying dataset to RAM Disk ($LOCAL_RAM)..."
-    mkdir -p "$LOCAL_RAM"
-    # Copy LMDB
-    rsync -ah "$REMOTE_DATA" "$LOCAL_RAM/"
-    echo "[LOG] Dataset copied successfully."
-else
-    echo "[LOG] Dataset already present in RAM Disk."
-fi
 
 # Environment activation
 export MAMBA_EXE='/home/users/j/jacer/programs/micromamba'
@@ -66,26 +52,26 @@ send_telegram "🚀 Pretraining [$(date "+%Y-%m-%d %H:%M:%S")]"
 python -m train.pretrain "$@" experiment="$experiment" &
 child_pid=$!
 wait "$child_pid"
-# echo "--------------------------------------------------"
-# send_telegram "🚀 Finetuning 1: reben_7k"
-# python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=reben_7k &
-# child_pid=$!
-# wait "$child_pid"
-# echo "--------------------------------------------------"
-# send_telegram "🚀 Finetuning 2: sen1floods11"
-# python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=sen1floods11 &
-# child_pid=$!
-# wait "$child_pid"
-# echo "--------------------------------------------------"
-# send_telegram "🚀 Finetuning 3: cashew_plantation"
-# python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=cashew_plantation &
-# child_pid=$!
-# wait "$child_pid"
-# echo "--------------------------------------------------"
-# send_telegram "🚀 Finetuning 4: c2seg"
-# python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=c2seg &
-# child_pid=$!
-# wait "$child_pid"
+echo "--------------------------------------------------"
+send_telegram "🚀 Finetuning 1: reben_7k"
+python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=reben_7k &
+child_pid=$!
+wait "$child_pid"
+echo "--------------------------------------------------"
+send_telegram "🚀 Finetuning 2: sen1floods11"
+python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=sen1floods11 &
+child_pid=$!
+wait "$child_pid"
+echo "--------------------------------------------------"
+send_telegram "🚀 Finetuning 3: cashew_plantation"
+python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=cashew_plantation &
+child_pid=$!
+wait "$child_pid"
+echo "--------------------------------------------------"
+send_telegram "🚀 Finetuning 4: c2seg"
+python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=c2seg &
+child_pid=$!
+wait "$child_pid"
 # echo "--------------------------------------------------"
 # send_telegram "🚀 Finetuning 5: burn_scars"
 # python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=burn_scars &

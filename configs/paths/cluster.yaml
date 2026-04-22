@@ -1,4 +1,6 @@
-reben_dir:             "/dev/shm/jacer/datasets/reben/BigEarthNet-S2_lmdb/"
+fast_dir: "/scratch"
+
+reben_dir:             "${paths.fast_dir}/jacer/datasets/reben/BigEarthNet-S2_lmdb/"
 reben_keys:            "/scratch/jacer/datasets/reben/keys.pkl"
 
 sen1floods11_dir:      "/scratch/jacer/datasets/sen1floods11/"
