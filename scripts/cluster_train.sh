@@ -3,7 +3,7 @@
 
 #SBATCH --gres=gpu:a100:1
 #SBATCH --mem=200G
-#SBATCH --cpus-per-gpu=20
+#SBATCH --cpus-per-gpu=14
 #SBATCH --partition=gpu_short
 #SBATCH --time=0-10:00:00
 
