@@ -2,8 +2,8 @@
 #SBATCH --job-name=rs_mae_train
 
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=180G
-#SBATCH --cpus-per-gpu=10
+#SBATCH --mem=200G
+#SBATCH --cpus-per-gpu=20
 #SBATCH --partition=gpu_short
 #SBATCH --time=0-10:00:00
 
