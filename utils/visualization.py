@@ -14,7 +14,7 @@ def quant_norm(data, lower_quant=0.01, upper_quant=0.99):
     """percentile-based stretching
     processes each sample (image) in the batch independently"""
     is_numpy = isinstance(data, np.ndarray)
-    x = data.astype(np.float32, copy=True) if is_numpy else data.cpu().numpy().astype(np.float32)
+    x = data.astype(np.float32, copy=True) if is_numpy else data.cpu().float().numpy()
     np.nan_to_num(x, copy=False, nan=0.0, posinf=1.0, neginf=0.0)
 
     orig_ndim = x.ndim
@@ -121,7 +121,7 @@ def prepare_segmentation_visuals(imgs, masks, preds, bands=None, dataset_name=No
 
 def generate_saliency_grid(saliency_grid, image=None, alpha=0.5, vmin=None, vmax=None):
     if isinstance(saliency_grid, torch.Tensor):
-        saliency_grid = saliency_grid.detach().cpu().numpy()
+        saliency_grid = saliency_grid.detach().cpu().float().numpy()
     
     # prepare background image
     img_min, img_max = image.min(), image.max()
@@ -171,7 +171,7 @@ def generate_hog_image(hog_grid: torch.Tensor,
 
     if image is not None:
         if isinstance(image, torch.Tensor):
-            image = image.cpu().numpy()
+            image = image.cpu().float().numpy()
             if image.ndim == 3:
                 image = image.transpose(1, 2, 0)
 
@@ -185,7 +185,7 @@ def generate_hog_image(hog_grid: torch.Tensor,
         hog_image = np.zeros((h_grid * pool, w_grid * pool, 1), dtype=np.uint8)
 
     # Average over the channel dimension and move to CPU.
-    cell_gradient = hog_grid.mean(dim=0).detach().cpu().numpy()  # (nbins, h, w)
+    cell_gradient = hog_grid.mean(dim=0).detach().cpu().float().numpy()  # (nbins, h, w)
     cell_gradient = np.abs(cell_gradient) # **2 # contrast boost
     cell_gradient = np.nan_to_num(cell_gradient, nan=0.0)
 
@@ -223,7 +223,7 @@ def _ensure_image_list(img):
     Returns: np.ndarray of shape (B, H, W, C)
     """
     if isinstance(img, torch.Tensor):
-        img = img.cpu().numpy()
+        img = img.cpu().float().numpy()
         if img.ndim == 4: img = img.transpose(0, 2, 3, 1)
         elif img.ndim == 3 and img.shape[0] <= 3:
             img = img.transpose(1, 2, 0)
@@ -241,7 +241,7 @@ def _ensure_image_list(img):
     elif isinstance(img, list):
         for i in range(len(img)):
             if isinstance(img[i], torch.Tensor):
-                img[i] = img[i].cpu().numpy()
+                img[i] = img[i].cpu().float().numpy()
                 if img[i].ndim == 3:
                     img[i] = img[i].transpose(1, 2, 0)
                     
@@ -252,7 +252,7 @@ def _ensure_image_list(img):
 
 def plot_segmentation_mask(mask, dataset_name=None):
     if isinstance(mask, torch.Tensor): 
-        mask = mask.cpu().numpy()
+        mask = mask.cpu().float().numpy()
 
     mask = mask.squeeze()
     unique_ids = np.unique(mask)

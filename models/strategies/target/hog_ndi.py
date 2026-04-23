@@ -41,12 +41,13 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 
 	def forward(self, imgs, **kwargs):
 		"""
-		raw_imgs : (B, C, H, W) passed via kwargs
+		imgs     : (B, C, H, W) normalized imagery
+		raw_imgs : (B, C, H, W) raw imagery passed via kwargs
 		returns: Tuple of (hog_tokens, ndi_tokens)
 		"""
 		raw_imgs = kwargs["raw_imgs"]
-		hog_tokens = self._get_raw_hog_targets(imgs) # or raw_imgs, matters only for precision (when using float16..)
-		ndi_tokens = self._get_raw_ndi_targets(raw_imgs)
+		hog_tokens = self._get_raw_hog_targets(imgs) # Use normalized branch for HOG stability
+		ndi_tokens = self._get_raw_ndi_targets(raw_imgs) # Use raw branch for NDI calibration
 
 		# Apply per-patch Z-score normalization if enabled
 		if self.norm_pix: # destroys the physical meaning
