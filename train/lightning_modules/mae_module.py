@@ -223,7 +223,7 @@ class MAEModule(L.LightningModule):
         self.logger.log_image(key=tag, images=[grid], step=self.global_step)
         
         # HOG
-        if self.model.target.out_channels == 1: band_indices = [0]
+        if self.model.target.hog_out_channels == 1: band_indices = [0]
         hog_recon_list, hog_target_list, hog_recon_overlayed_list, scale_factor = [], [], [], 3
         imgs = torch.nn.functional.interpolate(imgs, scale_factor=scale_factor, mode='bilinear', align_corners=False)
         mask_expanded = torch.nn.functional.interpolate(mask_expanded.float(), scale_factor=scale_factor, mode='nearest')
