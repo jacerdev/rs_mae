@@ -1,9 +1,11 @@
-reben_dir:             "/scratch/jacer/datasets/reben/BigEarthNet-S2_lmdb/"
-reben_keys:            "/scratch/jacer/datasets/reben/keys.pkl"
+prefix: "/scratch/jacer"
 
-sen1floods11_dir:      "/scratch/jacer/datasets/sen1floods11/"
-cashew_plantation_dir: "/scratch/jacer/datasets/cashew_plantation/"
-c2seg_dir:             "/scratch/jacer/datasets/c2seg/"
-burn_scars_dir:        "/scratch/jacer/datasets/burn_scars/"
+reben_dir:             "${paths.prefix}/datasets/reben/BigEarthNet-S2_lmdb/"
+reben_keys:            "${paths.prefix}/datasets/reben/keys.pkl"
 
-wandb_outdir:          "/scratch/jacer/outputs/training_out/"
+sen1floods11_dir:      "${paths.prefix}/datasets/sen1floods11/"
+cashew_plantation_dir: "${paths.prefix}/datasets/cashew_plantation/"
+c2seg_dir:             "${paths.prefix}/datasets/c2seg/"
+burn_scars_dir:        "${paths.prefix}/datasets/burn_scars/"
+
+wandb_outdir:          "${paths.prefix}/outputs/training_out/"
