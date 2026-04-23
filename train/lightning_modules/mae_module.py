@@ -191,8 +191,8 @@ class MAEModule(L.LightningModule):
         hog_target, ndi_target = self.model.target.restore(torch.cat([hog_target, ndi_target], dim=-1), gt_imgs=raw_imgs)
         ndi_target = unpatchify(ndi_target, p, H, W, HOGNDITarget.NDI_CHANNELS)
         
-        pool = self.model.target.hog.pool
-        nbins = self.model.target.hog.nbins
+        pool = self.model.target.pool
+        nbins = self.model.target.nbins
         n = p // pool
         hog_target = hog_target.reshape(num_samples, h, w, -1, n, n, nbins).permute(0, 3, 6, 1, 4, 2, 5) # (num_samples, C, nbins, h, n, w, n)
         hog_target = hog_target.reshape(num_samples, -1, nbins, h*n, w*n) # (num_samples, C, nbins, hn, wn)

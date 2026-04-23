@@ -6,12 +6,12 @@ masker:
 
 target:
   _target_: models.strategies.target.HOGNDITarget
-  norm_pix: false # per patch z normalization (after HOG/NDI computation)
+  norm_pix: true # per patch z normalization (after HOG/NDI computation)
   # NDI
   bands: ${bands}
   # HOG
   patch_size: ${patch_size}
-  pool: ${patch_size} # 8
+  pool: 8 # must be a divisor of patch_size
   nbins: 9
   use_max_gradient: true
   gaussian_window: null # 14 := grid_size i.e. img_size // patch_size

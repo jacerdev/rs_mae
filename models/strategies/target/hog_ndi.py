@@ -24,10 +24,11 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 
 		assert patch_size % pool == 0, "patch_size must be divisible by pool"
 		self.pool = pool
+		self.nbins = nbins
 		self.norm_pix = norm_pix
-		self.out_channels = 1 if use_max_gradient else len(bands)
+		self.hog_out_channels = 1 if use_max_gradient else len(bands)
 
-		self._hog_feats = (patch_size // pool)**2 * self.out_channels * nbins
+		self._hog_feats = (patch_size // pool)**2 * self.hog_out_channels * nbins
 		self._ndi_feats = patch_size**2 * HOGNDITarget.NDI_CHANNELS
 
 		TargetGenerator.__init__(self, patch_size=patch_size,
@@ -35,11 +36,6 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 
 		self.hog = HOGLayer(nbins=nbins, pool=pool, in_channels=len(bands), use_max_gradient=use_max_gradient,
 							gaussian_window=gaussian_window, normalize=normalize)
-		
-		#self.ndi = NDILayer(bands=bands)
-		# Registered as buffers so they move with the model to(device)
-		#self.register_buffer("denorm_mean", torch.tensor(bands_mean, dtype=torch.float32).view(-1, 1, 1))
-		#self.register_buffer("denorm_std",  torch.tensor(bands_std,  dtype=torch.float32).view(-1, 1, 1))
 
 		self.ndi = NDILayer(bands=bands)
 
@@ -53,9 +49,9 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 		ndi_tokens = self._get_raw_ndi_targets(raw_imgs)
 
 		# Apply per-patch Z-score normalization if enabled
-		if self.norm_pix:
-			hog_tokens = z_normalize(hog_tokens) # meaningless for HOG
-			ndi_tokens = z_normalize(ndi_tokens) # probably harmful cuz range is already [-1, 1]
+		if self.norm_pix: # destroys the physical meaning
+			hog_tokens = z_normalize(hog_tokens)
+			ndi_tokens = z_normalize(ndi_tokens)
 
 		return hog_tokens, ndi_tokens
 
