@@ -1,22 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=rs_mae_train
 
-#SBATCH --gres=gpu:a100:1
-#SBATCH --mem=256G
-#SBATCH --cpus-per-gpu=32
-#SBATCH --partition=gpu_short
-#SBATCH --time=1-00:00:00
-
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=aloui@campus.tu-berlin.de
-#SBATCH --output=/scratch/jacer/outputs/slurm/job-%j.slurm.out
-#SBATCH --chdir=/home/users/j/jacer/projects/rs_mae/
-
-
-# import SECRETS_PATH, get_value, send_telegram
-#source /home/users/j/jacer/projects/rs_mae/scripts/functions.sh
-
-#trap on_exit EXIT TERM INT
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <experiment_name> [hydra_overrides...]"
