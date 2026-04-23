@@ -148,18 +148,18 @@ def get_parameter_groups_llrd(model, weight_decay, backbone_lr, decoder_lr, laye
 
     return list(param_groups_by_var.values())
 
-def get_checkpoint_path(experiment, dataset, artifacts_dir, wandb_project="RS_MAE-Thesis"):
+def get_checkpoint_path(experiment, dataset_name, artifacts_dir, wandb_project="RS_MAE-Thesis"):
     workspace_root = Path(__file__).parents[1]
     runs_json_path = workspace_root / "runs.json"
     
     with open(runs_json_path, "r") as f:
         runs_data = json.load(f)
     
-    if dataset == "c2seg_wuhan": dataset = "c2seg_beijing"
-    elif dataset == "c2seg_berlin": dataset = "c2seg_augsburg"
-    run_id = runs_data.get(experiment, {}).get(dataset, {}).get("run_id")
+    if dataset_name == "c2seg_wuhan": dataset_name = "c2seg_beijing"
+    elif dataset_name == "c2seg_berlin": dataset_name = "c2seg_augsburg"
+    run_id = runs_data.get(experiment, {}).get(dataset_name, {}).get("run_id")
     if not run_id:
-        raise ValueError(f"Run ID not found for experiment='{experiment}', dataset='{dataset}' in {runs_json_path}")
+        raise ValueError(f"Run ID not found for experiment='{experiment}', dataset_name='{dataset_name}' in {runs_json_path}")
     
     ckpt_dir = Path(artifacts_dir) / wandb_project / run_id / "checkpoints"
     

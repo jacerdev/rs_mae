@@ -58,7 +58,7 @@ def main(cfg: DictConfig):
             dataset_class = CashewPlantationDataset
             dataset_class_cfg = CashewPlantationDataset_Cfg
 
-        case "c2seg_beijing" | "c2seg_wuhan" | "c2seg_augsburg" | "c2seg_berlin":
+        case name if name.startswith("c2seg"):
             dataset_class = C2SegDataset
             dataset_class_cfg = C2SegDataset_Cfg
             train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
