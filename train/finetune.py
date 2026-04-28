@@ -14,9 +14,9 @@ import torch
 import wandb
 
 from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset
+from models.segmentation.segmentation_vit import load_pretrained_encoder_weights
 from train.lightning_modules import SegmentationDataModule, SegmentationViTModule
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
-from utils.utils import load_pretrained_encoder_weights
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="finetune")

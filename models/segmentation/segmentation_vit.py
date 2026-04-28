@@ -6,7 +6,6 @@ import torch.nn as nn
 import logging
 
 from models.backbones import MaskedAutoencoderViT
-from models.backbones.layers.embedding import PatchEmbedding
 
 
 class MAEPyramidEncoder(nn.Module):
@@ -133,3 +132,43 @@ class SegmentationViT(SegmentationModel):
         decoder_output = self.decoder(*features)
         masks = self.segmentation_head(decoder_output)
         return masks
+
+def load_pretrained_encoder_weights(model, ckpt_path, bands): # model is a SegmentationViT
+    logging.info(f"Loading pretrained MAE weights from {ckpt_path}")
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    state_dict = ckpt["state_dict"]
+
+    # drop pos_embed keys because they're fixed 2D sine-cosine embeddings
+    raw_state_dict = {k.replace("model.", "", 1): v for k, v in state_dict.items()
+                      if k.startswith("model.") and "pos_embed" not in k}
+
+    # slice patch_embed.proj.weight to match the downstream model's expected bands
+    PRETRAINED_MODEL_BANDS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+    if list(bands) != PRETRAINED_MODEL_BANDS:
+        if set(bands).issubset(PRETRAINED_MODEL_BANDS):
+            band_indices = [PRETRAINED_MODEL_BANDS.index(b) for b in bands]
+            logging.info(f"Slicing patch_embed.proj.weight: {band_indices}")
+            raw_state_dict["patch_embed.proj.weight"] = raw_state_dict["patch_embed.proj.weight"][:, band_indices, :, :]
+        else:
+            logging.warning(f"At least one band is unknown in {bands}")
+
+    # remap to the SegmentationViT's encoder structure
+    adjusted_state_dict = {f"encoder.vit.{k}": v for k, v in raw_state_dict.items()}
+
+    # preemptively strip shape mismatches
+    target_state = model.state_dict()
+    valid_state_dict = {}
+
+    for k, v in adjusted_state_dict.items():
+        if k in target_state:
+            if v.shape == target_state[k].shape:
+                valid_state_dict[k] = v
+            else:
+                logging.warning(f"Shape mismatch dropping '{k}': target={target_state[k].shape} vs ckpt={v.shape}")
+        else:
+            valid_state_dict[k] = v # Let strict=False deal with extra MAE parameters (decoder..)
+
+    missing, unexpected = model.load_state_dict(valid_state_dict, strict=False)
+
+    logging.debug(f"Missing keys: {missing}")
+    logging.debug(f"Unexpected keys: {unexpected}")

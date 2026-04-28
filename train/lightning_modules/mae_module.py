@@ -6,7 +6,8 @@ import torch
 import torchvision.utils as vutils
 
 from models.backbones import MaskedAutoencoderViT
-from models.strategies.target import NormalizedPixelTarget, HOGNDITarget
+from models.strategies.target import HOGNDITarget
+from models.strategies.loss import FFTEnhancedLoss
 from utils.config import MaskedAutoencoderViT_Cfg
 from utils.spatial_ops import unpatchify
 from utils.visualization import quant_norm, generate_hog_image, generate_saliency_grid
@@ -42,14 +43,19 @@ class MAEModule(L.LightningModule):
     def on_train_epoch_end(self):
         if hasattr(self.model, "masker") and hasattr(self.model.masker, "set_epoch"):
             self.model.masker.set_epoch(self.current_epoch + 1)
+        if hasattr(self.model, "loss") and hasattr(self.model.loss, "set_epoch"):
+            self.model.loss.set_epoch(self.current_epoch + 1)
 
     def training_step(self, batch, batch_idx):
         loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio)
         
-        if len(extra_losses) > 1:
+        if isinstance(self.model.target, HOGNDITarget):
             self.log("train_hog_loss", extra_losses[0], on_step=True, on_epoch=True, sync_dist=True)
             self.log("train_ndi_loss", extra_losses[1], on_step=True, on_epoch=True, sync_dist=True)
-        #loss = extra_losses[0]# + extra_losses[1]############################
+        elif isinstance(self.model.loss, FFTEnhancedLoss):
+            self.log("train_mse_loss", extra_losses[0], on_step=True, on_epoch=True, sync_dist=True)
+            self.log("train_amp_loss", extra_losses[1], on_step=True, on_epoch=True, sync_dist=True)
+            self.log("train_phase_loss", extra_losses[2], on_step=True, on_epoch=True, sync_dist=True)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
         
@@ -60,11 +66,14 @@ class MAEModule(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio, phase="val")
         
-        if len(extra_losses) > 1:
+        if isinstance(self.model.target, HOGNDITarget):
             self.log("val_hog_loss", extra_losses[0], on_epoch=True, sync_dist=True)
             self.log("val_ndi_loss", extra_losses[1], on_epoch=True, sync_dist=True)
-        #loss = extra_losses[0]# + extra_losses[1]############################
-        
+        elif isinstance(self.model.loss, FFTEnhancedLoss):
+            self.log("val_mse_loss", extra_losses[0], on_epoch=True, sync_dist=True)
+            self.log("val_amp_loss", extra_losses[1], on_epoch=True, sync_dist=True)
+            self.log("val_phase_loss", extra_losses[2], on_epoch=True, sync_dist=True)
+
         self.log("val_loss", loss, on_epoch=True, prog_bar=True, sync_dist=True)
         
         if batch_idx == 0:

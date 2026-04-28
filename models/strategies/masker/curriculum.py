@@ -8,11 +8,11 @@ class CurriculumMasker(nn.Module, Masker):
     """
     Curriculum Masker that transitions from Easy to Random to Hard tasks based on saliency and epoch.
     """
-    def __init__(self, saliency_extractor, num_epochs, easy_end=0.1, hard_start=0.6, min_w=-0.5, max_w=0.7):
+    def __init__(self, saliency_extractor, max_epochs, easy_end=0.1, hard_start=0.6, min_w=-0.5, max_w=0.7, **kwargs):
         nn.Module.__init__(self)
-        Masker.__init__(self)
+        Masker.__init__(self, **kwargs)
         self.saliency_extractor = saliency_extractor
-        self.num_epochs = num_epochs
+        self.max_epochs = max_epochs
         self.epoch = 0
 
         self.min_w = min_w
@@ -23,14 +23,14 @@ class CurriculumMasker(nn.Module, Masker):
     def set_epoch(self, epoch):
         self.epoch = epoch
 
-    def compute_masking_score(self, saliency, epoch, num_epochs):
+    def compute_masking_score(self, saliency, epoch, max_epochs):
         """
         Higher score patches are to be masked.
         
         Args:
             saliency: Tensor of shape (B, N) representing the richness/saliency of each patch.
             epoch: Current training epoch.
-            num_epochs: Total number of training epochs E.
+            max_epochs: Total number of training epochs E.
             
         Returns:
             scores: Tensor of shape (B, N) containing the masking scores.
@@ -39,7 +39,7 @@ class CurriculumMasker(nn.Module, Masker):
         noise = torch.rand_like(saliency)
         
         # weights
-        gamma = epoch / num_epochs
+        gamma = epoch / max_epochs
         if gamma < self.easy_end: # Easy phase: saliency weight = min_w -> 0
             alpha = (1 - (gamma / self.easy_end)) * self.min_w
         elif gamma < self.hard_start: # Random phase: saliency weight = 0
@@ -67,7 +67,7 @@ class CurriculumMasker(nn.Module, Masker):
                 raise ValueError("raw_imgs must be provided for CurriculumMasker in curriculum phase")
 
             saliency = self.get_normalized_saliency(raw_imgs).flatten(1) # (B, N)
-            scores = self.compute_masking_score(saliency, self.epoch, self.num_epochs)
+            scores = self.compute_masking_score(saliency, self.epoch, self.max_epochs)
         
         else: # val: random masking
             B, N, D = x.shape
@@ -84,7 +84,7 @@ if __name__ == "__main__":
     saliency = torch.tensor([[0.1, 0.9, 0.2, 0.8], [0.5, 0.5, 0.5, 0.5]])
     
     # Use a lambda to return the mock saliency
-    masking = CurriculumMasker(saliency_extractor=lambda _: saliency, num_epochs=10)
+    masking = CurriculumMasker(saliency_extractor=lambda _: saliency, max_epochs=10)
     
     # Test batch 0 saliency: [0.1, 0.9, 0.2, 0.8]
     masking.set_epoch(0)

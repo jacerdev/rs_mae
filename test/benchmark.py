@@ -6,6 +6,7 @@ import hydra
 from hydra.utils import instantiate
 import logging
 from omegaconf import DictConfig
+import pandas as pd
 from pathlib import Path
 import torch
 import torch.nn as nn
@@ -190,6 +191,61 @@ def main(cfg: DictConfig):
 
     return results
 
+def save_results(results, dataset_name, experiment_name, ood_split=None, csv_path="results.csv"):
+    """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
+    display_name = (dataset_name + ("_" + ood_split if ood_split else "")) \
+        .replace("_", " ").title().strip()
+
+    experiment_col = experiment_name.replace("_", " ").title().strip()
+
+    csv_path = Path(csv_path)
+
+    # load or initialize
+    if csv_path.exists():
+        df = pd.read_csv(csv_path)
+    else:
+        df = pd.DataFrame(columns=["Dataset", "Metric"])
+
+    # normalize
+    df = df.astype(object)
+    df["Dataset"] = df["Dataset"].astype(str).str.strip().replace(r"^\s*$", pd.NA, regex=True).ffill()
+    df["Metric"] = df["Metric"].astype(str).str.strip().str.lower()
+
+    # ensure column exists
+    if experiment_col not in df.columns:
+        df[experiment_col] = None
+
+    # insert / update
+    for metric_name, val in results.items():
+        if metric_name == "loss":
+            continue
+
+        metric_name = metric_name.lower().strip()
+
+        mask = (df["Dataset"] == display_name) & (df["Metric"] == metric_name)
+
+        if mask.any():
+            df.loc[mask, experiment_col] = f"{val*100:.2f}"
+        else:
+            new_row = {
+                "Dataset": display_name,
+                "Metric": metric_name,
+                experiment_col: f"{val*100:.2f}"
+            }
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+    # keep table structured
+    metric_order = ["acc", "iou", "f1"]
+    df["Metric"] = pd.Categorical(df["Metric"], categories=metric_order, ordered=True)
+
+    df = df.sort_values(by=["Dataset", "Metric"]).reset_index(drop=True)
+
+    # blank repeated dataset names
+    df_out = df.copy()
+    df_out["Dataset"] = df_out["Dataset"].where(
+        df_out["Dataset"] != df_out["Dataset"].shift(), "")
+
+    df_out.to_csv(csv_path, index=False)
 
 if __name__ == "__main__":
     torch.set_float32_matmul_precision('high')

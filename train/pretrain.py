@@ -30,20 +30,23 @@ def main(cfg: DictConfig):
         resume="allow" if cfg.wandb.run_id else None)
 
     # Experiment
-    masker = None
-    target = instantiate(cfg.target)
-    loss = instantiate(cfg.loss)
-
+    masker_kwargs, target_kwargs, loss_kwargs = {}, {}, {}
+    
     match cfg.experiment_name:
         case "baseline":
-            masker = instantiate(cfg.masker)
+            pass
         case "feat_guided":
-            masker = instantiate(cfg.masker)
+            pass
         case "curriculum_ndi" | "curriculum_hog":
-            saliency_extractor = instantiate(cfg.saliency_extractor)
-            masker = instantiate(cfg.masker, saliency_extractor=saliency_extractor, num_epochs=cfg.max_epochs)
+            masker_kwargs = {"saliency_extractor": instantiate(cfg.saliency_extractor)}
+        case "fourier_loss":
+            pass
         case _:
             raise ValueError("Experiment not recognized.")
+
+    masker = instantiate(cfg.masker, **masker_kwargs)
+    target = instantiate(cfg.target, **target_kwargs)
+    loss = instantiate(cfg.loss, **loss_kwargs)
 
     # Data
     train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
@@ -111,6 +114,14 @@ def main(cfg: DictConfig):
     # Train
     exit_code = 1
     try:
+        # XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+        mock_ckpt = cfg.get("mock_ckpt", None)
+        if mock_ckpt:
+            from models.backbones.mae_vit import load_pretrained_mae_weights
+            logging.warning(f"--- TEMPORARY: Loading mock weights from {mock_ckpt} ---")
+            load_pretrained_mae_weights(model.model, mock_ckpt, cfg.bands)
+        # XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+
         # re-seed before training to ensure deterministic sample order regardless of model initialization
         L.seed_everything(cfg.seed, workers=True)
         trainer.fit(model, datamodule=data_module, ckpt_path=resume_path)

@@ -154,7 +154,7 @@ class MaskedAutoencoderViT(nn.Module):
         return self.loss(pred, target, mask, **kwargs)
 
     def forward(self, imgs, mask_ratio=0.75, **kwargs):
-        raw_imgs = torch.nan_to_num(imgs, nan=0.0, posinf=0.0, neginf=0.0)
+        raw_imgs = torch.nan_to_num(imgs.detach(), nan=0.0, posinf=0.0, neginf=0.0)
 
         if self.normalize:
             imgs = (imgs - self.mean) / self.std
@@ -165,3 +165,46 @@ class MaskedAutoencoderViT(nn.Module):
         
         loss, extra_losses = self.forward_loss(imgs, pred, mask, latent=latent, raw_imgs=raw_imgs)
         return loss, pred, mask, extra_losses
+
+
+def load_pretrained_mae_weights(model, ckpt_path, bands):
+    """
+    Load pretrained MAE weights (encoder + decoder) into a MaskedAutoencoderViT instance.
+    Handles matching of specific spectral bands using patch_embed.proj.weight slicing.
+    """
+    logging.info(f"Loading pretrained full MAE weights from {ckpt_path}")
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    state_dict = ckpt["state_dict"]
+
+    # drop pos_embed keys because they're fixed 2D sine-cosine embeddings
+    # MAEModule wraps the model, so in the checkpoint keys start with "model."
+    raw_state_dict = {k.replace("model.", "", 1): v for k, v in state_dict.items()
+                      if k.startswith("model.") and "pos_embed" not in k}
+
+    # slice patch_embed.proj.weight to match the downstream model's expected bands
+    PRETRAINED_MODEL_BANDS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+    if bands is not None and list(bands) != PRETRAINED_MODEL_BANDS:
+        if set(bands).issubset(PRETRAINED_MODEL_BANDS):
+            band_indices = [PRETRAINED_MODEL_BANDS.index(b) for b in bands]
+            logging.info(f"Slicing patch_embed.proj.weight: {band_indices}")
+            raw_state_dict["patch_embed.proj.weight"] = raw_state_dict["patch_embed.proj.weight"][:, band_indices, :, :]
+        else:
+            logging.warning(f"At least one band is unknown in {bands}")
+
+    # preemptively strip shape mismatches
+    target_state = model.state_dict()
+    valid_state_dict = {}
+
+    for k, v in raw_state_dict.items():
+        if k in target_state:
+            if v.shape == target_state[k].shape:
+                valid_state_dict[k] = v
+            else:
+                logging.warning(f"Shape mismatch dropping '{k}': target={target_state[k].shape} vs ckpt={v.shape}")
+        else:
+            valid_state_dict[k] = v 
+
+    missing, unexpected = model.load_state_dict(valid_state_dict, strict=False)
+
+    logging.debug(f"Missing keys: {missing}")
+    logging.debug(f"Unexpected keys: {unexpected}")

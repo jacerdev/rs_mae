@@ -7,10 +7,9 @@ import torchvision.utils as vutils
 import torchvision.transforms.functional as TF
 from torchmetrics.classification import MulticlassAccuracy, JaccardIndex, F1Score
 
-from models.segmentation.segmentation_vit import SegmentationViT
+from models.segmentation import SegmentationViT
 from utils.config import SegmentationViT_Cfg
 from utils.spatial_ops import windowed_inference, windowed_evaluation
-from utils.utils import get_parameter_groups_llrd
 from utils.visualization import prepare_segmentation_visuals
 
 REFERENCE_BATCH_SIZE = 256
@@ -175,3 +174,69 @@ class SegmentationViTModule(L.LightningModule):
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
         tag = f"predictions / {split}"
         self.logger.log_image(key=tag, images=[grid], step=self.global_step)
+
+
+def get_parameter_groups_llrd(model, weight_decay, backbone_lr, decoder_lr, layer_lr_decay): # model is a SegmentationViT
+    """Creates parameter groups with Layer-wise Learning Rate Decay (LLRD)"""
+    param_groups_by_name = {}
+    param_groups_by_var = {}
+
+    num_vit_blocks = len(model.encoder.vit.blocks)
+
+    for param_name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+
+        # determine if weight decay should be applied
+        if len(param.shape) == 1 or param_name.endswith(".bias") or "pos_embed" in param_name or "cls_token" in param_name:
+            group_type = "no_decay"
+            applied_weight_decay = 0.0
+        else:
+            group_type = "decay"
+            applied_weight_decay = weight_decay
+
+        # layer-wise lr for ViT backbone
+        if param_name.startswith("encoder.vit."):
+            if param_name.startswith("encoder.vit.patch_embed") or "cls_token" in param_name or "pos_embed" in param_name:
+                layer_idx = 0  # stem / embeddings
+            elif param_name.startswith("encoder.vit.blocks."):
+                block_idx = int(param_name.split("encoder.vit.blocks.")[1].split(".")[0])
+                layer_idx = block_idx + 1
+            else:
+                layer_idx = num_vit_blocks + 1  # final norm layer
+
+            # lr decayed for earlier layers
+            lr_scale = layer_lr_decay ** (num_vit_blocks + 1 - layer_idx)
+            param_lr = backbone_lr * lr_scale
+            group_name = f"{group_type}_backbone_layer_{layer_idx}"
+
+        # adapter layers
+        elif param_name.startswith("encoder.res_adapters."):
+            param_lr = backbone_lr
+            group_name = f"{group_type}_res_adapters"
+
+        # decoder layers
+        else:
+            param_lr = decoder_lr
+            group_name = f"{group_type}_decoder"
+
+        # append parameter group
+        if group_name not in param_groups_by_name:
+            param_groups_by_name[group_name] = {
+                "weight_decay": applied_weight_decay,
+                "lr": param_lr,
+                "params": [],
+            }
+            param_groups_by_var[group_name] = {
+                "weight_decay": applied_weight_decay,
+                "lr": param_lr,
+                "params": [],
+            }
+
+        param_groups_by_name[group_name]["params"].append(param_name)
+        param_groups_by_var[group_name]["params"].append(param)
+
+    for group_name, group_dict in param_groups_by_name.items():
+        logging.debug(f"Group: {group_name} | LR: {group_dict['lr']:.2e} | WD: {group_dict['weight_decay']} | Params: {len(group_dict['params'])}")
+
+    return list(param_groups_by_var.values())
