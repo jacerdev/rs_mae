@@ -13,5 +13,5 @@ loss:
   _target_: models.strategies.loss.FFTEnhancedLoss
   patch_size: ${patch_size}
   lambda_amp: 0.5
-  lambda_phase: 0.1
+  lambda_phase: 0.05
   norm: "ortho"
