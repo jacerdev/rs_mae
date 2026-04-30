@@ -2,7 +2,12 @@
 __pycache__/
 
 # Files
-/best_pretrained_ckpt.txt
+/best_ckpt.txt
+/todos.txt
+context.md
+reben_profiled.py
+/runs.json
+
 
 # Folders
 /checkpoints/
@@ -10,6 +15,7 @@ __pycache__/
 /RS_MAE-Thesis/
 /sandbox/
 /wandb/
+/cloud/
 
 # Other
 /.git/

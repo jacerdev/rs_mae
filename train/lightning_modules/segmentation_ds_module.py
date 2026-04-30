@@ -22,7 +22,7 @@ class SegmentationDataModule(L.LightningDataModule):
         self.prefetch_factor = prefetch_factor
         self.train_ds= self.val_ds = self.test_ds = None
 
-    def _create_dataset(split: str, transform=None):
+    def _create_dataset(self, split: str, transform=None):
         dataset_kwargs = {**asdict(self.dataset_cfg)}
         dataset_kwargs.update(grid_sampling=False) if split != "train" else None
         return self.dataset_class(**dataset_kwargs,

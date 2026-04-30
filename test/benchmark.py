@@ -17,10 +17,14 @@ from tqdm import tqdm
 from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset
 from models.segmentation.segmentation_vit import SegmentationViT
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
-from utils.tensor_ops import sliding_window_inference
+from utils.spatial_ops import windowed_inference, windowed_evaluation
 from utils.utils import get_checkpoint_path
-from utils.visualization import quant_norm, get_color_tensor, plot_images
+from utils.visualization import plot_images, prepare_segmentation_visuals
 
+batch_size = 16
+num_workers = 4
+prefetch_factor = 2
+artifacts_dir = "/mnt/ssd/.FINISHED_RUNS"
 
 class EvaluationDataset(torch.utils.data.Dataset):
     def __init__(self, ds):
@@ -32,7 +36,7 @@ class EvaluationDataset(torch.utils.data.Dataset):
         return self.ds.ids[idx], img, mask
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="test")
+@hydra.main(version_base="1.3", config_path="../configs", config_name="finetune")
 def main(cfg: DictConfig):
     # Dataset
     test_transform = A.Compose([ToTensorV2()])
@@ -55,7 +59,7 @@ def main(cfg: DictConfig):
             dataset_class = CashewPlantationDataset
             dataset_class_cfg = CashewPlantationDataset_Cfg
 
-        case "c2seg_augsburg" | "c2seg_berlin" | "c2seg_beijing" | "c2seg_wuhan":
+        case name if name.startswith("c2seg"):
             dataset_class = C2SegDataset
             dataset_class_cfg = C2SegDataset_Cfg
 
@@ -64,23 +68,23 @@ def main(cfg: DictConfig):
 
     # Data
     dataset_cfg = dataset_class_cfg(**cfg.dataset)
-    dataset_kwargs = {**asdict(dataset_cfg), "grid_sampling": False}
     ood_split = cfg.get("ood_split", None)
-    test_ds = dataset_class(**dataset_kwargs, split=ood_split if ood_split else "test", transform=test_transform)
+    test_ds = dataset_class(**{**asdict(dataset_cfg), "grid_sampling": False},
+                            split=ood_split if ood_split else "test", transform=test_transform)
     logging.info(f"Test set size: [{len(test_ds)}, {tuple(test_ds[0][0].shape)}]")
 
     eval_ds = EvaluationDataset(test_ds)
     test_loader = DataLoader(
         eval_ds,
-        batch_size=cfg.batch_size,
+        batch_size=batch_size,
         shuffle=False,
-        num_workers=cfg.num_workers,
-        prefetch_factor=cfg.prefetch_factor,
-        persistent_workers=cfg.num_workers > 0,
+        num_workers=num_workers,
+        prefetch_factor=prefetch_factor,
+        persistent_workers=num_workers > 0,
         pin_memory=True)
 
     # Cache Check
-    cache_dir = Path(cfg.artifacts_dir) / cfg.experiment_name / (cfg.dataset_name + ("_" + ood_split if ood_split else ""))
+    cache_dir = Path(artifacts_dir) / "results" / cfg.experiment_name / (cfg.dataset_name + ("_" + ood_split if ood_split else ""))
     use_cache = cache_dir.exists() and any(p.suffix == ".pt" for p in cache_dir.iterdir())
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -96,7 +100,7 @@ def main(cfg: DictConfig):
         model = SegmentationViT(**asdict(model_cfg))
 
         # Checkpoint
-        ckpt_path = get_checkpoint_path(cfg.experiment_name, cfg.dataset_name, cfg.artifacts_dir)
+        ckpt_path = get_checkpoint_path(cfg.experiment_name, cfg.dataset_name, artifacts_dir, wandb_project=cfg.wandb.project)
         try:
             state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
             state_dict = state.get("state_dict", state)
@@ -141,15 +145,16 @@ def main(cfg: DictConfig):
                 else:
                     preds_list = []
                     for sample in imgs:
-                        pred = sliding_window_inference(model=model, image=sample,
-                                                     window_size=input_size,
-                                                     stride=input_size // 2,
-                                                     num_classes=num_classes,
-                                                     batch_size=cfg.batch_size,
-                                                     merger_device='cpu')
+                        pred = windowed_inference(model=model, image=sample,
+                                                window_size=input_size,
+                                                stride=input_size // 2,
+                                                num_classes=num_classes,
+                                                batch_size=batch_size,
+                                                merger_device='cpu')
                         preds_list.append(pred)
                     preds = torch.stack(preds_list, dim=0) # (B, C, H, W) on CPU
                 # Save each result
+                #logging.info(f"Saving outputs..")
                 for i in range(len(imgs)):
                     sample_id = sample_ids[i]
                     torch.save(preds[i:i+1].cpu().clone(), cache_dir / f"{sample_id}.pt")
@@ -161,117 +166,87 @@ def main(cfg: DictConfig):
                 for torchmetric in [acc, iou, f1]:
                     torchmetric.update(preds, masks)
             else:
-                batch_loss_tensor = tiled_evaluation(
-                    preds=preds, # on CPU
-                    masks=masks,
-                    input_size=input_size,
-                    num_classes=num_classes,
-                    batch_size=cfg.batch_size,
-                    loss_fn=loss_fn,
-                    torchmetrics=[acc, iou, f1]
-                )
+                batch_loss_tensor = windowed_evaluation(preds=preds, # on CPU
+                                                        masks=masks,
+                                                        input_size=input_size,
+                                                        batch_size=batch_size,
+                                                        loss_fn=loss_fn,
+                                                        torchmetrics=[acc, iou, f1])
                 batch_loss = batch_loss_tensor.item() if batch_loss_tensor is not None else 0.0
 
             total_loss += batch_loss
 
-            #imgs_vis, gt_vis, pred_vis = create_visuals(imgs.detach().cpu(), masks.detach().cpu(), preds.detach().cpu(),
+            #imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(imgs.detach().cpu(), masks.detach().cpu(), preds.detach().cpu(),
             #                                            bands=dataset_cfg.bands, dataset_name=cfg.dataset_name)
             #plot_images(torch.stack([imgs_vis, gt_vis, pred_vis], dim=1).flatten(0,1), ncols=3)
 
     results = {f"loss": total_loss / len(test_loader),
-               f"acc":  acc.compute().item(),
-               f"iou":  iou.compute().item(),
-               f"f1":   f1.compute().item()}
+               f"Acc":  acc.compute().item(),
+               f"IoU":  iou.compute().item(),
+               f"F1":   f1.compute().item()}
+    
+    log_results(results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split, csv_path="results.csv")
+    
     for k, v in results.items():
         print(f"{k}: {v:.4f}")
 
-    # Save to results.csv
-    try:
-        display_name = (cfg.dataset_name + ("_" + ood_split if ood_split else "")).replace("_", " ").title()
-        experiment_col = cfg.experiment_name.replace("_", " ").title()
-
-        csv_path = Path("results.csv")
-        if csv_path.exists():
-            df = pd.read_csv(csv_path)
-            df = df.astype(object) 
-            df['Dataset'] = df['Dataset'].ffill()
-        else:
-            df = pd.DataFrame(columns=["Dataset", "Metric"])
-
-        if experiment_col not in df.columns:
-            df[experiment_col] = None
-        
-        df = df.reset_index(drop=True)
-
-        for metric_name, val in results.items():
-            if metric_name == "loss": continue
-            mask = (df["Dataset"] == display_name) & (df["Metric"] == metric_name)
-            if mask.any():
-                df.loc[mask, experiment_col] = f"{val*100.0:.2f}"
-            else:
-                new_row = {"Dataset": display_name, "Metric": metric_name, experiment_col: f"{val*100.0:.2f}"}
-                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
-        # Blank out redundant Dataset names for final formatting
-        df_out = df.copy()
-        df_out['Dataset'] = df_out['Dataset'].where(df_out['Dataset'] != df_out['Dataset'].shift(), "")
-        
-        df_out.to_csv(csv_path, index=False)
-        logging.info(f"Saved results to results.csv")
-    except Exception as e:
-        logging.warning(f"Could not save results to results.csv: {e}")
-
     return results
 
-def tiled_evaluation(preds, masks, input_size, num_classes, batch_size=1,
-                   loss_fn=None, torchmetrics=None):
-    if torchmetrics is None: torchmetrics = []
-    device = masks.device
-    
-    # Ensure preds and masks are compatible with CPU slicing if large
-    preds = preds.cpu()
-    masks = masks.long().cpu()
-    
-    _, _, H, W = preds.shape
+def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path="results.csv"):
+    """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
+    display_name = (dataset_name + ("_" + ood_split if ood_split else "")) \
+        .replace("_", " ").title().strip()
 
-    # Tile size logic
-    tile_size = int(input_size * batch_size**0.5)
-    h, w = (H // (H // tile_size + 1), W // (W // tile_size + 1))
+    experiment_col = experiment_name.replace("_", " ").title().strip()
 
-    losses = []
-    for y in range(0, H, h):
-        for x in range(0, W, w):
-            y_end = min(y + h, H)
-            x_end = min(x + w, W)
-            preds_tile = preds[:, :, y:y_end, x:x_end].to(device)
-            masks_tile = masks[:, y:y_end, x:x_end].to(device)
-            
-            if loss_fn is not None:
-                losses.append(loss_fn(preds_tile, masks_tile))
-            for torchmetric in torchmetrics:
-                torchmetric.update(preds_tile, masks_tile)
-                    
-    loss = torch.stack(losses).mean() if loss_fn is not None else None
-    return loss
+    csv_path = Path(csv_path)
 
-def create_visuals(imgs, masks, preds, bands=None, dataset_name=None):
-        # get predicted classes
-        pred_classes = torch.argmax(preds, dim=1) # (B, H, W)
+    # load or initialize
+    if csv_path.exists():
+        df = pd.read_csv(csv_path)
+    else:
+        df = pd.DataFrame(columns=["Dataset", "Metric"])
 
-        true_color_bands = ["B04", "B03", "B02"]
-        band_indices = [bands.index(b) for b in true_color_bands if b
-                        in bands] if bands is not None else [0, 1, 2]
+    # normalize
+    df = df.astype(object)
+    df["Dataset"] = df["Dataset"].astype(str).str.strip().replace(r"^\s*$", pd.NA, regex=True).ffill()
+    df["Metric"] = df["Metric"].astype(str).str.strip().str.lower()
 
-        imgs_vis = quant_norm(imgs[:, band_indices, :, :])
-        
-        num_classes = preds.shape[1]
-        color_tensor = get_color_tensor(dataset_name) if dataset_name is not None else \
-                       get_color_tensor(max_id=num_classes)
-        # mask.shape = (K, H, W) ==> color_tensor[mask].shape = (K, H, W, 3)
-        gt_vis = color_tensor[masks].permute(0, 3, 1, 2) # (K, 3, H, W)
-        pred_vis = color_tensor[pred_classes].permute(0, 3, 1, 2)
+    # ensure column exists
+    if experiment_col not in df.columns:
+        df[experiment_col] = None
 
-        return imgs_vis, gt_vis, pred_vis
+    # insert / update
+    for metric_name, val in results.items():
+        if metric_name == "loss":
+            continue
+
+        metric_name = metric_name.lower().strip()
+
+        mask = (df["Dataset"] == display_name) & (df["Metric"] == metric_name)
+
+        if mask.any():
+            df.loc[mask, experiment_col] = f"{val*100:.2f}"
+        else:
+            new_row = {
+                "Dataset": display_name,
+                "Metric": metric_name,
+                experiment_col: f"{val*100:.2f}"
+            }
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+    # keep table structured
+    metric_order = ["acc", "iou", "f1"]
+    df["Metric"] = pd.Categorical(df["Metric"], categories=metric_order, ordered=True)
+
+    df = df.sort_values(by=["Dataset", "Metric"]).reset_index(drop=True)
+
+    # blank repeated dataset names
+    df_out = df.copy()
+    df_out["Dataset"] = df_out["Dataset"].where(
+        df_out["Dataset"] != df_out["Dataset"].shift(), "")
+
+    df_out.to_csv(csv_path, index=False)
 
 if __name__ == "__main__":
     torch.set_float32_matmul_precision('high')

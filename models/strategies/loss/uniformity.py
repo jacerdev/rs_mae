@@ -1,45 +1,40 @@
-import torch
+import torch.nn.functional as F
 
 from models.strategies.loss.base import ReconstructionLoss
+from models.strategies.loss import MaskedMSELoss
 
 
 class UniformityEnhancedMAELoss(ReconstructionLoss):
-    def __init__(self, recon_loss_obj: ReconstructionLoss, lambda_unif=1.0, **kwargs):
+    def __init__(self, recon_loss_obj: ReconstructionLoss, lambda_unif=0.01, **kwargs):
         super().__init__(**kwargs)
-        self.recon_loss = recon_loss_obj
+        self.recon_loss = MaskedMSELoss()
         self.lambda_unif = lambda_unif
-
+        
     def __call__(self, pred, target, mask, **kwargs):
         """
         pred: (B, N, D)
         target: (B, N, D)
         mask: (B, N)
-        **kwargs: expects 'latent' (B, N_enc, D_enc)
+        kwargs: expects 'latent' (B, N_enc, D_enc)
         """
-        latent = kwargs.get('latent')
-
         loss_mae = self.recon_loss(pred, target, mask)
         
-        if latent is not None:
-             # use [CLS] token for uniformity
-             features = latent[:, 0, :]
-             loss_unif = uniformity_loss(features)
-             return loss_mae + self.lambda_unif * loss_unif
-            
-        return loss_mae
-
-
+        # the paper uses the [CLS] token (index 0) after the encoder's layer norm
+        latent = kwargs['latent']
+        features = latent[:, 0, :]
+        loss_unif = uniformity_loss(features)
+        
+        return loss_mae + self.lambda_unif * loss_unif
+        
 def uniformity_loss(features):
     """
-    features: Tensor (B, D), unmasked features
+    features: Tensor (B, D), typically the [CLS] token
     Returns:
-        scalar loss
+        mean of squared pairwise similarities
     """
-    features = torch.nn.functional.normalize(features, dim=-1)
+    features = F.normalize(features, dim=-1)
+    
+    # compute the full pairwise cosine similarity matrix (self-similarity is constant so zero gradient)
+    sim_matrix = features @ features.T
 
-    # shuffle to get negative pairs
-    perm = torch.randperm(features.size(0), device=features.device)
-    features_neg = features[perm]
-
-    sim = (features * features_neg).sum(dim=-1)  # (B,)
-    return (sim ** 2).mean()
+    return (sim_matrix ** 2).mean()

@@ -1,5 +1,3 @@
-import torch
-
 from models.strategies.loss.base import ReconstructionLoss
 
 

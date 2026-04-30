@@ -218,11 +218,6 @@ class ReBENDataset(Dataset):
             band_tensors.append(t)
         image = torch.stack(band_tensors, dim=0)
 
-        if self.normalize:
-            image = (image - self.mean) / self.std
-
-        image = torch.nan_to_num(image, nan=0.0)
-
         # load segmentation mask if requested
         mask = None
         if self.return_mask:
@@ -248,6 +243,10 @@ class ReBENDataset(Dataset):
             else:
                 image = self.transform(image=image_np)["image"]
 
+        if self.normalize:
+            image = (image - self.mean) / self.std
+        #image = torch.nan_to_num(image, nan=0.0)###################
+        
         return (image, mask) if self.return_mask else image
 
 

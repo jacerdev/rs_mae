@@ -7,7 +7,7 @@ from .data_loaders import load_reben_7k, load_burn_scars, load_sen1floods11, loa
 
 class SegmentationDataset(Dataset):
     """stochastic grid-sampling with a translational per-epoch offset (relies on current_epoch being updated at the start of each epoch)"""
-    def __init__(self, samples, masks, ids=None, grid_sampling=True, crop_size=None, min_margin=None, transform=None):
+    def __init__(self, samples, masks, grid_sampling=True, crop_size=None, min_margin=None, transform=None, normalize=False, bands=None, ids=None):
         """
         samples (list or np.ndarray): Raw image array(s) (H, W, C).
         masks (list or np.ndarray): Raw mask array(s) (H, W).
@@ -18,9 +18,14 @@ class SegmentationDataset(Dataset):
         """
         self.samples = samples
         self.masks = masks
-        self.ids = ids
         self.grid_sampling = grid_sampling
         self.transform = transform
+        self.normalize = normalize
+        self.ids = ids
+        
+        if self.normalize:
+            self.mean = torch.tensor([ReBENDataset.BAND_STATS["mean"][b] for b in bands], dtype=torch.float32).view(-1, 1, 1)
+            self.std = torch.tensor([ReBENDataset.BAND_STATS["std"][b] for b in bands], dtype=torch.float32).view(-1, 1, 1)
 
         if not self.grid_sampling:
             self.crop_size = self.current_epoch = self.margin_y = self.margin_x = self.grid_coords = self.offsets = None
@@ -87,6 +92,10 @@ class SegmentationDataset(Dataset):
             augmented = self.transform(image=img, mask=mask)
             img, mask = augmented["image"], augmented["mask"]
 
+        if self.normalize:
+            img = (img - self.mean) / self.std
+        #img = torch.nan_to_num(img, nan=0.0)###################
+        
         return img, mask
 
 class ReBEN7kDataset(SegmentationDataset):
@@ -97,16 +106,21 @@ class ReBEN7kDataset(SegmentationDataset):
                  crop_size=112, grid_sampling=True, min_margin=None,
                  **ReBENDataset_kwargs):
         
+        normalize = ReBENDataset_kwargs["normalize"]
+        ReBENDataset_kwargs.update(normalize=False)
+        bands = ReBENDataset_kwargs["bands"]
+        
         samples, masks, ids = load_reben_7k(data_dir, **ReBENDataset_kwargs)
         
         super().__init__(
             samples=samples,
             masks=masks,
-            ids=ids,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
             min_margin=min_margin,
-            transform=transform
+            transform=transform,
+            normalize=normalize, bands=bands,
+            ids=ids
         )
 
 class Sen1Floods11Dataset(SegmentationDataset):
@@ -122,16 +136,15 @@ class Sen1Floods11Dataset(SegmentationDataset):
         
         samples, masks, ids = load_sen1floods11(data_dir, split_file, split, bands)
 
-        if normalize: samples = _normalize_samples(samples, bands)
-
         super().__init__(
             samples=samples,
             masks=masks,
-            ids=ids,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
             min_margin=min_margin,
-            transform=transform
+            transform=transform,
+            normalize=normalize, bands=bands,
+            ids=ids
         )
         
 class BurnScarsDataset(SegmentationDataset):
@@ -146,16 +159,15 @@ class BurnScarsDataset(SegmentationDataset):
         
         samples, masks, ids = load_burn_scars(data_dir, split_file, split, bands)
 
-        if normalize: samples = _normalize_samples(samples, bands)
-
         super().__init__(
             samples=samples,
             masks=masks,
-            ids=ids,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
             min_margin=min_margin,
-            transform=transform
+            transform=transform,
+            normalize=normalize, bands=bands,
+            ids=ids
         )
 
 class CashewPlantationDataset(SegmentationDataset):
@@ -175,16 +187,15 @@ class CashewPlantationDataset(SegmentationDataset):
         
         samples, masks, ids = load_cashew_plantation(data_dir, split_file, split, bands)
 
-        if normalize: samples = _normalize_samples(samples, bands)
-
         super().__init__(
             samples=samples,
             masks=masks,
-            ids=ids,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
             min_margin=min_margin,
-            transform=transform
+            transform=transform,
+            normalize=normalize, bands=bands,
+            ids=ids
         )
 
 class C2SegDataset(SegmentationDataset):
@@ -211,27 +222,15 @@ class C2SegDataset(SegmentationDataset):
                  crop_size=112, grid_sampling=True, min_margin=None):
         
         samples, masks, ids = load_c2seg(data_dir, city=city, split=split, split_frac=split_frac, key='MSI', bands=bands)
-        
-        if normalize: samples = _normalize_samples(samples, bands)
             
         super().__init__(
             samples=samples,
             masks=masks,
-            ids=ids,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
             min_margin=min_margin,
-            transform=transform
+            transform=transform,
+            normalize=normalize, bands=bands,
+            ids=ids
         )
 
-def _normalize_samples(samples, bands):
-    """Normalizes samples in-place using ReBENDataset statistics for given bands"""
-    mean = np.array([ReBENDataset.BAND_STATS["mean"][b] for b in bands], dtype=np.float32).reshape(1, 1, -1)
-    std  = np.array([ReBENDataset.BAND_STATS["std"][b] for b in bands], dtype=np.float32).reshape(1, 1, -1)
-    
-    for i, sample in enumerate(samples):
-        samples[i] = sample.astype(np.float32, copy=False)
-        samples[i] -= mean
-        samples[i] /= std
-        
-    return samples

@@ -2,10 +2,10 @@
 #SBATCH --job-name=rs_mae_train
 
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=256G
-#SBATCH --cpus-per-gpu=32
+#SBATCH --mem=200G
+#SBATCH --cpus-per-gpu=14
 #SBATCH --partition=gpu_short
-#SBATCH --time=1-00:00:00
+#SBATCH --time=0-10:00:00
 
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=aloui@campus.tu-berlin.de
@@ -13,41 +13,22 @@
 #SBATCH --chdir=/home/users/j/jacer/projects/rs_mae/
 
 
-# import SECRETS_PATH, get_value, send_telegram
+# import SECRETS_PATH, get_value, send_telegram, on_exit
 source /home/users/j/jacer/projects/rs_mae/scripts/functions.sh
 
-CLEANUP_DONE=false
-on_exit() {
-    exit_code=$?
-    # Check if this function has already run
-    if [ "$CLEANUP_DONE" = true ]; then return; fi
-    CLEANUP_DONE=true
-    # Kill background python process if it's still running
-    if [ -n "$child_pid" ]; then kill "$child_pid" 2>/dev/null || true; fi
-
-    set +e  # Disable strict exit for the cleanup
-    
-    if [ "$exit_code" -eq 0 ]; then send_telegram "✅ Finished training successfully at $(date "+%Y-%m-%d %H:%M:%S")"
-    else send_telegram "❌ Training failed (exit code $exit_code) on $(hostname) at $(date "+%Y-%m-%d %H:%M:%S")"
-    fi
-    #rsync -av /scratch/jacer/outputs/ /home/users/j/jacer/outputs/
-    #send_telegram "📁 Finished copying outputs to home directory"
-    exit $exit_code
-}
 trap on_exit EXIT TERM INT
 mkdir -p '/scratch/jacer/outputs/slurm/'
 mkdir -p '/scratch/jacer/outputs/training_out/' # Specified in configs/paths/cluster.yaml as wandb_outdir
 
 set -e # Strict processing instructions
 
-#module load nvidia/cuda/12.1 # wrong version.. (not needed for mamba env anyway)
-#module load nvidia/cudnn/9.0.0
-
-export MAMBA_EXE='/home/users/j/jacer/myPrograms/mamba/micromamba'
+# Environment activation
+export MAMBA_EXE='/home/users/j/jacer/programs/micromamba'
 export MAMBA_ROOT_PREFIX='/home/users/j/jacer/.local/share/mamba'
 eval "$("$MAMBA_EXE" shell hook --shell bash)"
 micromamba activate /scratch/jacer/envs/rs_mae
 
+# WandB
 export WANDB_API_KEY=$(get_value "$SECRETS_PATH" "WANDB_API_KEY")
 export WANDB_MODE=${WANDB_MODE:-online}
 
@@ -57,34 +38,63 @@ free -h
 echo -e "• Node: $(hostname) • SLURM_JOB_NODELIST: $SLURM_JOB_NODELIST\n• SLURM_CPUS_ON_NODE: $SLURM_CPUS_ON_NODE\n• SLURM_GTIDS: $SLURM_GTIDS"
 echo "Using python: $(which python)"
 
+# --------------------------------------------------
 
-echo "--------------------------------------------------"
-send_telegram "🚀 Pretraining [$(date "+%Y-%m-%d %H:%M:%S")]"
-python -m train.pretrain "$@" experiment=feat_guided &
-child_pid=$!
-wait "$child_pid"
-echo "--------------------------------------------------"
-send_telegram "🚀 Finetuning 1: reben_7k"
-python -m train.finetune "$@" segmentation_ds=reben_7k &
-child_pid=$!
-wait "$child_pid"
-echo "--------------------------------------------------"
-send_telegram "🚀 Finetuning 2: sen1floods11"
-python -m train.finetune "$@" segmentation_ds=sen1floods11 &
-child_pid=$!
-wait "$child_pid"
-echo "--------------------------------------------------"
-send_telegram "🚀 Finetuning 3: cashew_plantation"
-python -m train.finetune "$@" segmentation_ds=cashew_plantation &
-child_pid=$!
-wait "$child_pid"
-echo "--------------------------------------------------"
-send_telegram "🚀 Finetuning 4: c2seg"
-python -m train.finetune "$@" segmentation_ds=c2seg &
-child_pid=$!
-wait "$child_pid"
-echo "--------------------------------------------------"
-send_telegram "🚀 Finetuning 5: burn_scars"
-python -m train.finetune "$@" segmentation_ds=burn_scars &
-child_pid=$!
-wait "$child_pid"
+if [ -z "$1" ]; then
+    echo "Usage: sbatch $0 <experiment_name_1> [experiment_name_2...] [hydra_overrides...]"
+    exit 1
+fi
+
+# Parse experiment names (stop at the first hydra override containing '=')
+experiments=()
+while [[ $# -gt 0 && "$1" != *=* ]]; do
+    experiments+=("$1")
+    shift
+done
+overrides="$@"
+
+datasets=("reben_7k" "sen1floods11" "cashew_plantation" "c2seg")
+
+echo "=================================================="
+send_telegram "🚀 Starting Pretraining for: ${experiments[*]}"
+echo "=================================================="
+
+for experiment in "${experiments[@]}"; do
+    python -m train.pretrain experiment="$experiment" $overrides &
+    echo "Started pretraining for $experiment (PID: $!)"
+done
+
+wait
+
+for experiment in "${experiments[@]}"; do
+    echo "=================================================="
+    send_telegram "🧬 Starting Finetuning: $experiment"
+    echo "=================================================="
+
+    # Loop over datasets with a 2-step jump for parallel batching
+    for ((i=0; i<${#datasets[@]}; i+=2)); do
+        ds1=${datasets[$i]}
+        ds2=${datasets[$i+1]}
+
+        echo "--------------------------------------------------"
+        send_telegram "🚀 Batch: $ds1 & $ds2 ($experiment)"
+        
+        # Launch first dataset in background
+        python -m train.finetune \
+            experiment_name="$experiment" \
+            segmentation_ds="$ds1" $overrides &
+        pid1=$!
+
+        # Launch second dataset in background (if it exists)
+        if [ ! -z "$ds2" ]; then
+            python -m train.finetune \
+                experiment_name="$experiment" \
+                segmentation_ds="$ds2" $overrides &
+            pid2=$!
+        fi
+
+        wait $pid1 $pid2
+    done
+done
+
+send_telegram "✅ All experiments and datasets finished."

@@ -1,18 +1,17 @@
 from dataclasses import asdict
 import lightning as L
 import logging
+import math
 import torch
 import torch.nn as nn
 import torchvision.utils as vutils
 import torchvision.transforms.functional as TF
 from torchmetrics.classification import MulticlassAccuracy, JaccardIndex, F1Score
 
-from models.segmentation.segmentation_vit import SegmentationViT
-from test.test import tiled_evaluation
+from models.segmentation import SegmentationViT
 from utils.config import SegmentationViT_Cfg
-from utils.tensor_ops import sliding_window_inference
-from utils.utils import get_parameter_groups_llrd
-from utils.visualization import quant_norm, get_color_tensor
+from utils.spatial_ops import windowed_inference, windowed_evaluation
+from utils.visualization import prepare_segmentation_visuals
 
 REFERENCE_BATCH_SIZE = 256
 DECODER_LR_SCALER = 10 # uninitialized_weights_lr = pretrained_weights_lr * DECODER_LR_SCALER
@@ -20,9 +19,7 @@ DECODER_LR_SCALER = 10 # uninitialized_weights_lr = pretrained_weights_lr * DECO
 class SegmentationViTModule(L.LightningModule):
     def __init__(self, model_cfg: SegmentationViT_Cfg,
                  base_lr,
-                 reduce_lr_factor,
-                 reduce_lr_threshold,
-                 reduce_lr_patience,
+                 warmup_frac,
                  layer_lr_decay,
                  weight_decay,
                  bands=None, dataset_name=None):
@@ -31,37 +28,27 @@ class SegmentationViTModule(L.LightningModule):
         self.save_hyperparameters()
         self.model_cfg = model_cfg
         self.base_lr = base_lr
-        self.reduce_lr_factor = reduce_lr_factor
-        self.reduce_lr_threshold = reduce_lr_threshold
-        self.reduce_lr_patience = reduce_lr_patience
+        self.warmup_frac = warmup_frac
         self.layer_lr_decay = layer_lr_decay
         self.weight_decay = weight_decay
 
         self.bands = bands
         self.dataset_name = dataset_name
-        self.color_tensor = get_color_tensor(self.dataset_name) if self.dataset_name is not None else \
-                            get_color_tensor(max_id=self.model_cfg.num_classes)
 
         self.model = SegmentationViT(**asdict(self.model_cfg))
 
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
-        self.train_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
+        #self.train_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
         self.val_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
         
-        self.train_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
+        #self.train_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
         self.val_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
         
-        self.train_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
+        #self.train_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
         self.val_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
 
     def forward(self, x):
         return self.model(x)
-
-    def on_train_epoch_end(self):
-        # update grid sampling offsets for the next epoch (SegmentationDataset.set_epoch)
-        train_ds = self.trainer.datamodule.train_ds
-        if hasattr(train_ds, "set_epoch"):
-            train_ds.set_epoch(self.trainer.current_epoch + 1)
 
     def training_step(self, batch, batch_idx):
         imgs, masks = batch
@@ -69,13 +56,13 @@ class SegmentationViTModule(L.LightningModule):
         masks = masks.long()
         
         loss = self.loss_fn(preds, masks)
-        self.train_acc(preds, masks)
-        self.train_iou(preds, masks)
-        self.train_f1(preds, masks)
+        #self.train_acc(preds, masks)
+        #self.train_iou(preds, masks)
+        #self.train_f1(preds, masks)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("train_iou", self.train_iou, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
-        self.log("train_f1", self.train_f1, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        #self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        #self.log("train_iou", self.train_iou, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        #self.log("train_f1", self.train_f1, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
         
         if batch_idx == 0:
             self._log_predictions({"imgs": imgs, "preds": preds, "masks": masks}, "train")
@@ -96,7 +83,7 @@ class SegmentationViTModule(L.LightningModule):
         else:
             preds_list = []
             for sample in imgs:
-                pred = sliding_window_inference(model=self.model, image=sample,
+                pred = windowed_inference(model=self.model, image=sample,
                                             window_size=input_size,
                                             stride=input_size // 2,
                                             num_classes=self.model.num_classes,
@@ -105,8 +92,7 @@ class SegmentationViTModule(L.LightningModule):
                 preds_list.append(pred)
             preds = torch.stack(preds_list, dim=0) # (B, num_classes, H, W) on CPU
             
-            loss = tiled_evaluation(preds=preds, masks=masks, input_size=input_size,
-                                   num_classes=self.model.num_classes,
+            loss = windowed_evaluation(preds=preds, masks=masks, input_size=input_size,
                                    batch_size=self.trainer.datamodule.batch_size,
                                    loss_fn=self.loss_fn,
                                    torchmetrics=[self.val_acc, self.val_iou, self.val_f1])
@@ -130,11 +116,9 @@ class SegmentationViTModule(L.LightningModule):
         if self.trainer.accumulate_grad_batches > 1:
             effective_batch_size *= self.trainer.accumulate_grad_batches
             
-        logging.info(f"Effective batch size: {effective_batch_size}")
-
         scaled_backbone_lr = self.base_lr * effective_batch_size / REFERENCE_BATCH_SIZE
         scaled_decoder_lr = scaled_backbone_lr * DECODER_LR_SCALER
-        logging.info(f"Scaled Backbone LR: {scaled_backbone_lr:.6f} | Scaled Decoder LR: {scaled_decoder_lr:.6f}")
+        logging.info(f"Effective batch size: {effective_batch_size} | Scaled Backbone LR: {scaled_backbone_lr:.6f} | Scaled Decoder LR: {scaled_decoder_lr:.6f}")
         
         # retrieve the custom parameter groups
         param_groups = get_parameter_groups_llrd(self.model, weight_decay=self.weight_decay,
@@ -143,18 +127,31 @@ class SegmentationViTModule(L.LightningModule):
         optimizer = torch.optim.AdamW(param_groups, betas=(0.9, 0.999))
 
         # scheduler
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min",
-                                                factor=self.reduce_lr_factor, patience=self.reduce_lr_patience, threshold=self.reduce_lr_threshold,
-                                                min_lr=1e-6)
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min",
+        #                                         factor=self.reduce_lr_factor, patience=self.reduce_lr_patience, threshold=self.reduce_lr_threshold,
+        #                                         min_lr=1e-6)
 
-        return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "monitor": "val_loss",
-                                                        "interval": "epoch", "frequency": 1}}
+        # return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "monitor": "val_loss",
+        #                                                 "interval": "epoch", "frequency": 1}}
+
+        # scheduler (linear warmup + cosine annealing)
+        total_steps = self.trainer.estimated_stepping_batches
+        warmup_steps = int(self.warmup_frac * total_steps)
+
+        def lr_lambda(current_step):
+            if current_step < warmup_steps:
+                return float(current_step) / float(max(1, warmup_steps))
+            
+            # cosine decay
+            progress = float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps))
+            return 0.5 * (1.0 + math.cos(math.pi * progress))
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+        return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "interval": "step"}}
 
     def _log_predictions(self, outputs, split):
         imgs, preds, masks = outputs["imgs"].detach(), outputs["preds"].detach(), outputs["masks"].detach()
-        
-        # get predicted classes
-        pred_classes = torch.argmax(preds, dim=1) # (B, H, W)
         
         B, C, H, W = imgs.shape
 
@@ -162,7 +159,7 @@ class SegmentationViTModule(L.LightningModule):
             crop_size = min(768, H, W)
             imgs = TF.center_crop(imgs, output_size=crop_size)
             masks = TF.center_crop(masks, output_size=crop_size)
-            pred_classes = TF.center_crop(pred_classes, output_size=crop_size)
+            preds = TF.center_crop(preds, output_size=crop_size)
             num_samples = 1
         elif H > 256 or W > 256:
             num_samples = min(B, 2)
@@ -171,18 +168,11 @@ class SegmentationViTModule(L.LightningModule):
         
         selected_imgs = imgs[:num_samples]
         selected_masks = masks[:num_samples]
-        selected_preds = pred_classes[:num_samples]
+        selected_preds = preds[:num_samples]
 
-        true_color_bands = ["B04", "B03", "B02"]
-        band_indices = [self.bands.index(b) for b in true_color_bands if b
-                        in self.bands] if self.bands is not None else [0, 1, 2]
-
-        img_vis = quant_norm(selected_imgs[:, band_indices, :, :])
-        
-        color_tensor = self.color_tensor.to(masks.device)            
-        # mask.shape = (K, H, W) ==> color_tensor[mask].shape = (K, H, W, 3)
-        gt_mask_vis = color_tensor[selected_masks].permute(0, 3, 1, 2) # (K, 3, H, W)
-        pred_mask_vis = color_tensor[selected_preds].permute(0, 3, 1, 2)
+        img_vis, gt_mask_vis, pred_mask_vis = prepare_segmentation_visuals(
+            selected_imgs, selected_masks, selected_preds, 
+            bands=self.bands, dataset_name=self.dataset_name)
         
         rows = [img_vis, gt_mask_vis, pred_mask_vis]
         combined = torch.cat(rows, dim=0)
@@ -190,3 +180,69 @@ class SegmentationViTModule(L.LightningModule):
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
         tag = f"predictions / {split}"
         self.logger.log_image(key=tag, images=[grid], step=self.global_step)
+
+
+def get_parameter_groups_llrd(model, weight_decay, backbone_lr, decoder_lr, layer_lr_decay): # model is a SegmentationViT
+    """Creates parameter groups with Layer-wise Learning Rate Decay (LLRD)"""
+    param_groups_by_name = {}
+    param_groups_by_var = {}
+
+    num_vit_blocks = len(model.encoder.vit.blocks)
+
+    for param_name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+
+        # determine if weight decay should be applied
+        if len(param.shape) == 1 or param_name.endswith(".bias") or "pos_embed" in param_name or "cls_token" in param_name:
+            group_type = "no_decay"
+            applied_weight_decay = 0.0
+        else:
+            group_type = "decay"
+            applied_weight_decay = weight_decay
+
+        # layer-wise lr for ViT backbone
+        if param_name.startswith("encoder.vit."):
+            if param_name.startswith("encoder.vit.patch_embed") or "cls_token" in param_name or "pos_embed" in param_name:
+                layer_idx = 0  # stem / embeddings
+            elif param_name.startswith("encoder.vit.blocks."):
+                block_idx = int(param_name.split("encoder.vit.blocks.")[1].split(".")[0])
+                layer_idx = block_idx + 1
+            else:
+                layer_idx = num_vit_blocks + 1  # final norm layer
+
+            # lr decayed for earlier layers
+            lr_scale = layer_lr_decay ** (num_vit_blocks + 1 - layer_idx)
+            param_lr = backbone_lr * lr_scale
+            group_name = f"{group_type}_backbone_layer_{layer_idx}"
+
+        # adapter layers
+        elif param_name.startswith("encoder.res_adapters."):
+            param_lr = backbone_lr
+            group_name = f"{group_type}_res_adapters"
+
+        # decoder layers
+        else:
+            param_lr = decoder_lr
+            group_name = f"{group_type}_decoder"
+
+        # append parameter group
+        if group_name not in param_groups_by_name:
+            param_groups_by_name[group_name] = {
+                "weight_decay": applied_weight_decay,
+                "lr": param_lr,
+                "params": [],
+            }
+            param_groups_by_var[group_name] = {
+                "weight_decay": applied_weight_decay,
+                "lr": param_lr,
+                "params": [],
+            }
+
+        param_groups_by_name[group_name]["params"].append(param_name)
+        param_groups_by_var[group_name]["params"].append(param)
+
+    for group_name, group_dict in param_groups_by_name.items():
+        logging.debug(f"Group: {group_name} | LR: {group_dict['lr']:.2e} | WD: {group_dict['weight_decay']} | Params: {len(group_dict['params'])}")
+
+    return list(param_groups_by_var.values())

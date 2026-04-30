@@ -24,10 +24,19 @@ class MaskedAutoencoderViT(nn.Module):
                  masker=None, target=None, loss=None,
                  cls_token=True,
                  drop_path_rate=0., # vit-s 0.0, vit-b 0.1
-                 use_decoder=True):
+                 use_decoder=True,
+                 normalize=False, bands=None):
         super().__init__()
         
         self.use_decoder = use_decoder
+        self.normalize = normalize
+        
+        if self.normalize:
+            from datasets.reben import ReBENDataset
+            mean_tensor = torch.tensor([ReBENDataset.BAND_STATS["mean"][b] for b in bands], dtype=torch.float32)
+            std_tensor = torch.tensor([ReBENDataset.BAND_STATS["std"][b] for b in bands], dtype=torch.float32)
+            self.register_buffer("mean", mean_tensor.view(1, -1, 1, 1), persistent=False)
+            self.register_buffer("std", std_tensor.view(1, -1, 1, 1), persistent=False)
 
         # Encoder
         # Patch Embed -> Add CLS & Pos Embed -> Self-Attention Blocks -> Layer Norm
@@ -88,11 +97,11 @@ class MaskedAutoencoderViT(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def forward_encoder(self, x, mask_ratio):
+    def forward_encoder(self, x, mask_ratio, **kwargs):
         x = self.patch_embed(x)
         
         if self.use_decoder and mask_ratio > 0:
-            x, mask, ids_keep, ids_restore = self.masker.mask(x, mask_ratio)
+            x, mask, ids_keep, ids_restore = self.masker(x, mask_ratio, **kwargs) # pass kwargs for saliency-based masking
         else:
             B, N, D = x.shape
             ids_keep = None # passing None makes SineCosinePosEmbedding bypass gather
@@ -135,18 +144,67 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x
 
-    def forward_loss(self, imgs, pred, mask, latent=None):
+    def forward_loss(self, imgs, pred, mask, **kwargs):
         """
         imgs: [B, C_in, H, W]
         pred: [B, N, p*p*C_out]
         mask: [B, N], 0 is keep, 1 is remove,
         """
-        target = self.target(imgs)
-        return self.loss(pred, target, mask, latent=latent)
+        target = self.target(imgs, **kwargs)
+        return self.loss(pred, target, mask, **kwargs)
 
-    def forward(self, imgs, mask_ratio=0.75):
-        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+    def forward(self, imgs, mask_ratio=0.75, **kwargs):
+        raw_imgs = torch.nan_to_num(imgs.detach(), nan=0.0, posinf=0.0, neginf=0.0)
+
+        if self.normalize:
+            imgs = (imgs - self.mean) / self.std
+        imgs = torch.nan_to_num(imgs, nan=0.0, posinf=0.0, neginf=0.0)
+
+        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, raw_imgs=raw_imgs, **kwargs)
         pred = self.forward_decoder(latent, ids_restore)
         
-        loss, extra_losses = self.forward_loss(imgs, pred, mask, latent=latent)
+        loss, extra_losses = self.forward_loss(imgs, pred, mask, latent=latent, raw_imgs=raw_imgs)
         return loss, pred, mask, extra_losses
+
+
+def load_pretrained_mae_weights(model, ckpt_path, bands):
+    """
+    Load pretrained MAE weights (encoder + decoder) into a MaskedAutoencoderViT instance.
+    Handles matching of specific spectral bands using patch_embed.proj.weight slicing.
+    """
+    logging.info(f"Loading pretrained full MAE weights from {ckpt_path}")
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    state_dict = ckpt["state_dict"]
+
+    # drop pos_embed keys because they're fixed 2D sine-cosine embeddings
+    # MAEModule wraps the model, so in the checkpoint keys start with "model."
+    raw_state_dict = {k.replace("model.", "", 1): v for k, v in state_dict.items()
+                      if k.startswith("model.") and "pos_embed" not in k}
+
+    # slice patch_embed.proj.weight to match the downstream model's expected bands
+    PRETRAINED_MODEL_BANDS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+    if bands is not None and list(bands) != PRETRAINED_MODEL_BANDS:
+        if set(bands).issubset(PRETRAINED_MODEL_BANDS):
+            band_indices = [PRETRAINED_MODEL_BANDS.index(b) for b in bands]
+            logging.info(f"Slicing patch_embed.proj.weight: {band_indices}")
+            raw_state_dict["patch_embed.proj.weight"] = raw_state_dict["patch_embed.proj.weight"][:, band_indices, :, :]
+        else:
+            logging.warning(f"At least one band is unknown in {bands}")
+
+    # preemptively strip shape mismatches
+    target_state = model.state_dict()
+    valid_state_dict = {}
+
+    for k, v in raw_state_dict.items():
+        if k in target_state:
+            if v.shape == target_state[k].shape:
+                valid_state_dict[k] = v
+            else:
+                logging.warning(f"Shape mismatch dropping '{k}': target={target_state[k].shape} vs ckpt={v.shape}")
+        else:
+            valid_state_dict[k] = v 
+
+    missing, unexpected = model.load_state_dict(valid_state_dict, strict=False)
+
+    logging.debug(f"Missing keys: {missing}")
+    logging.debug(f"Unexpected keys: {unexpected}")

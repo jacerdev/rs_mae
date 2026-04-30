@@ -12,6 +12,7 @@ from pathlib import Path
 import torch
 import wandb
 
+from train.callbacks import TrainingStateCallback
 from train.lightning_modules import ReBENDataModule, MAEModule
 from utils.config import ReBENDataset_Cfg, MaskedAutoencoderViT_Cfg
 
@@ -30,20 +31,23 @@ def main(cfg: DictConfig):
         resume="allow" if cfg.wandb.run_id else None)
 
     # Experiment
-    masker = target = loss = None
+    masker_kwargs, target_kwargs, loss_kwargs = {}, {}, {}
+    
     match cfg.experiment_name:
         case "baseline":
-            masker = instantiate(cfg.masker)
-            target = instantiate(cfg.target)
-            loss = instantiate(cfg.loss)
+            pass
         case "feat_guided":
-            from datasets import ReBENDataset # just cuz it's set to normalize so NDI layer needs to denormalize
-            masker = instantiate(cfg.masker)
-            target = instantiate(cfg.target, bands_mean=[ReBENDataset.BAND_STATS["mean"][b] for b in cfg.bands],
-                                             bands_std=[ReBENDataset.BAND_STATS["std"][b] for b in cfg.bands])
-            loss = instantiate(cfg.loss)
+            pass
+        case "curriculum_ndi" | "curriculum_hog":
+            masker_kwargs = {"saliency_extractor": instantiate(cfg.saliency_extractor)}
+        case "fourier_loss":
+            pass
         case _:
             raise ValueError("Experiment not recognized.")
+
+    masker = instantiate(cfg.masker, **masker_kwargs)
+    target = instantiate(cfg.target, **target_kwargs)
+    loss = instantiate(cfg.loss, **loss_kwargs)
 
     # Data
     train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
@@ -68,14 +72,18 @@ def main(cfg: DictConfig):
     model = MAEModule(
         model_cfg=model_cfg,
         mask_ratio=cfg.mask_ratio,
-        warmup_frac=cfg.warmup_frac,
         base_lr=cfg.base_lr,
+        warmup_frac=cfg.warmup_frac,
         weight_decay=cfg.weight_decay,
         bands=cfg.bands)
 
     # Callbacks
-    checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=3,
-                                          filename="mae-{epoch:02d}-{val_loss:.4f}", save_last=True)
+    if cfg.get("use_last_ckpt", False):
+        checkpoint_callback = ModelCheckpoint(monitor=None, save_last=True,
+                                            filename="mae-{epoch:02d}-{val_loss:.4f}")
+    else:
+        checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_last=True, save_top_k=2,
+                                            filename="mae-{epoch:02d}-{val_loss:.4f}")
     lr_monitor = LearningRateMonitor(logging_interval='step')
 
     # Trainer
@@ -86,7 +94,7 @@ def main(cfg: DictConfig):
         devices="auto",
         strategy="ddp" if torch.cuda.device_count() > 1 else "auto",
         logger=wandb_logger,
-        callbacks=[checkpoint_callback, lr_monitor],
+        callbacks=[checkpoint_callback, lr_monitor, TrainingStateCallback()],
         plugins=[AsyncCheckpointIO()],
         precision=cfg.precision,
         log_every_n_steps=cfg.log_every_n_steps,
@@ -107,14 +115,24 @@ def main(cfg: DictConfig):
     # Train
     exit_code = 1
     try:
+        # XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+        mock_ckpt = cfg.get("mock_ckpt", None)
+        if mock_ckpt:
+            from models.backbones.mae_vit import load_pretrained_mae_weights
+            logging.warning(f"--- TEMPORARY: Loading mock weights from {mock_ckpt} ---")
+            load_pretrained_mae_weights(model.model, mock_ckpt, cfg.bands)
+        # XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+
+        # re-seed before training to ensure deterministic sample order regardless of model initialization
+        L.seed_everything(cfg.seed, workers=True)
         trainer.fit(model, datamodule=data_module, ckpt_path=resume_path)
             
         # Export the best checkpoint path
-        if getattr(checkpoint_callback, "best_model_path", None):
-            export_path = cfg.pretrained_ckpt_export_path
-            logging.info(f"Exporting best model path to {export_path}: {checkpoint_callback.best_model_path}")
-            with open(export_path, "w") as f:
-                f.write(checkpoint_callback.best_model_path)
+        best_model_path = checkpoint_callback.best_model_path
+        #if cfg.last_ckpt: best_model_path = checkpoint_callback.last_model_path
+        logging.info(f"Exporting best model path to {cfg.ckpt_export_path}: {best_model_path}")
+        with open(cfg.ckpt_export_path, "w") as f:
+            f.write(best_model_path)
         exit_code = 0
     finally:
         wandb.finish(exit_code=exit_code)

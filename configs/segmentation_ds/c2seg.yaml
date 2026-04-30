@@ -11,7 +11,7 @@ dataset:
   city: "beijing"
   split_frac: 0.85
   bands: ["B02", "B03", "B04", "B08"]
-  normalize: true
+  normalize: false
 
   grid_sampling: true
   crop_size: 234 # must be <= img_size

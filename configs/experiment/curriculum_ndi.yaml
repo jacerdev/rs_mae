@@ -1,0 +1,25 @@
+# @package _global_
+experiment_name: "curriculum_ndi"
+
+masker:
+  _target_: models.strategies.masker.CurriculumMasker
+  max_epochs: ${max_epochs}
+  easy_end: 0.0
+  hard_start: 0.5
+  min_w: -0.5
+  max_w: 0.5
+
+saliency_extractor:
+  _target_: utils.features.NDISaliency
+  patch_size: ${patch_size}
+  bands: ${bands}
+
+target:
+  _target_: models.strategies.target.NormalizedPixelTarget
+  patch_size: ${patch_size}
+  in_chans: ${in_chans}
+
+loss:
+  _target_: models.strategies.loss.MaskedMSELoss
+
+use_last_ckpt: true

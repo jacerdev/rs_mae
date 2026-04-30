@@ -14,9 +14,10 @@ import torch
 import wandb
 
 from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset
+from models.segmentation.segmentation_vit import load_pretrained_encoder_weights
+from train.callbacks import TrainingStateCallback
 from train.lightning_modules import SegmentationDataModule, SegmentationViTModule
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
-from utils.utils import load_pretrained_encoder_weights
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="finetune")
@@ -58,7 +59,7 @@ def main(cfg: DictConfig):
             dataset_class = CashewPlantationDataset
             dataset_class_cfg = CashewPlantationDataset_Cfg
 
-        case "c2seg_beijing" | "c2seg_wuhan" | "c2seg_augsburg" | "c2seg_berlin":
+        case name if name.startswith("c2seg"):
             dataset_class = C2SegDataset
             dataset_class_cfg = C2SegDataset_Cfg
             train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
@@ -83,18 +84,21 @@ def main(cfg: DictConfig):
     model = SegmentationViTModule(
         model_cfg=model_cfg,
         base_lr=cfg.base_lr,
-        reduce_lr_factor=cfg.reduce_lr_factor,
-        reduce_lr_threshold=cfg.reduce_lr_threshold,
-        reduce_lr_patience=cfg.reduce_lr_patience,
+        warmup_frac=cfg.warmup_frac,
         layer_lr_decay=cfg.layer_lr_decay,
         weight_decay=cfg.weight_decay,
-        bands=cfg.dataset.bands, cfg.dataset_name=cfg.dataset_name)
+        bands=cfg.dataset.bands, dataset_name=cfg.dataset_name)
 
     # Callbacks
-    checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=3,
-                                          filename="seg-{epoch:02d}-{val_loss:.4f}", save_last=True)
+    checkpoint_callback = ModelCheckpoint(monitor="val_iou", mode="max", save_last=True, save_top_k=5,
+                                          filename="seg-{epoch:02d}-{val_iou:.4f}")
     lr_monitor = LearningRateMonitor(logging_interval='step')
-    early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=cfg.early_stop_patience)
+    early_stopping = EarlyStopping(monitor="val_iou", mode="max", patience=cfg.early_stop_patience)
+    callbacks = [checkpoint_callback, lr_monitor, early_stopping, TrainingStateCallback()]
+    if Path("/content/drive/My Drive").exists():
+        from train.callbacks import CheckpointSyncCallback
+        checkpoints_dir = Path(cfg.wandb.outdir) / cfg.wandb.project
+        callbacks.append(CheckpointSyncCallback(checkpoints_dir))
 
     # Trainer
     trainer = L.Trainer(
@@ -104,7 +108,7 @@ def main(cfg: DictConfig):
         devices="auto",
         strategy="ddp" if torch.cuda.device_count() > 1 else "auto",
         logger=wandb_logger,
-        callbacks=[checkpoint_callback, lr_monitor, early_stopping],
+        callbacks=callbacks,
         plugins=[AsyncCheckpointIO()],
         precision=cfg.precision,
         log_every_n_steps=cfg.log_every_n_steps,
@@ -123,8 +127,8 @@ def main(cfg: DictConfig):
             logging.info(f"No last checkpoint found at {last_ckpt_path}")
 
     # Pretrained MAE weights
-    elif cfg.pretrained_ckpt_export_path:
-        actual_path = cfg.pretrained_ckpt_export_path
+    elif cfg.ckpt_export_path:
+        actual_path = cfg.ckpt_export_path
         if actual_path.endswith(".txt"):
             logging.info(f"Reading checkpoint path from text file: {actual_path}")
             with open(actual_path, "r") as f:
@@ -133,11 +137,13 @@ def main(cfg: DictConfig):
         load_pretrained_encoder_weights(model.model, actual_path, bands=cfg.dataset.bands)
 
     else:
-        logging.warning("Training from scratch ?!")
+        raise ValueError("Training from scratch ?!")
 
     # Train
     exit_code = 1
     try:
+        # re-seed before training to ensure deterministic sample order regardless of model initialization
+        L.seed_everything(cfg.seed, workers=True)
         trainer.fit(model, datamodule=data_module, ckpt_path=resume_path)
         exit_code = 0
     finally:

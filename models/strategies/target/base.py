@@ -16,7 +16,7 @@ class TargetGenerator:
         """
         Reverse the target transformation for visualization.
         pred: (B, N, D_out) - model predictions
-        imgs: (B, C, H, W) - original images needed for statistics (optional depending on target)
+        gt_imgs: (B, C, H, W) - the param `imgs` that was passed to __call__ (optional depending on target)
         returns: (B, N, D_out) - restored predictions in original range
         """
         # return None if no post-processing is needed

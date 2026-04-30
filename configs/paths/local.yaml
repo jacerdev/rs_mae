@@ -1,6 +1,7 @@
-#reben_dir:             "/mnt/ssd/datasets/reben/BigEarthNet-S2-3%_lmdb/"
-reben_dir:             "/mnt/ssd/datasets/reben/reben_7k/"
-reben_keys:            "/mnt/ssd/datasets/reben/keys.pkl"
+reben_dir:             "/mnt/ssd/datasets/reben/BigEarthNet-S2-1%_lmdb/"
+reben_keys:            "/mnt/ssd/datasets/reben/keys-1%.pkl"
+#reben_dir:             "/mnt/ssd/datasets/reben/reben_7k/"
+#reben_keys:            "/mnt/ssd/datasets/reben/keys_7k.pkl"
 
 sen1floods11_dir:      "/mnt/ssd/datasets/sen1floods11/"
 cashew_plantation_dir: "/mnt/ssd/datasets/cashew_plantation/"
@@ -8,8 +9,3 @@ c2seg_dir:             "/mnt/ssd/datasets/c2seg/"
 burn_scars_dir:        "/mnt/ssd/datasets/burn_scars/"
 
 wandb_outdir:          "/mnt/ssd/outputs/training_out/"
-
-# Other paths are defined relative to working directory
-
-
-# paths=local batch_size=16 num_workers=4 patch_size=32 max_epochs=1 log_every_n_steps=25 +fast_run=true

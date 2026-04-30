@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 
 @torch.inference_mode()
-def sliding_window_inference(model, image, window_size, stride, num_classes, batch_size, merger_device=None):
+def windowed_inference(model, image, window_size, stride, num_classes, batch_size, merger_device=None):
     """ 
     Batched sliding window inference with dynamic overlap distribution
 
@@ -39,7 +39,7 @@ def sliding_window_inference(model, image, window_size, stride, num_classes, bat
     model.eval()
     
     crops_iter = range(0, len(crops), batch_size)
-    if len(crops_iter) > 20: crops_iter = tqdm(crops_iter)
+    ####if len(crops_iter) > 20: crops_iter = tqdm(crops_iter)
     for i in crops_iter:
         batch_crops = crops[i : i + batch_size]
         batch_tiles = [image[:, y:y+window_size, x:x+window_size] for x, y, _, _ in batch_crops]
@@ -50,7 +50,37 @@ def sliding_window_inference(model, image, window_size, stride, num_classes, bat
         merger.integrate_batch(logits, np.array(batch_crops))
 
     return merger.merge()
+
+def windowed_evaluation(preds, masks, input_size, batch_size=1, loss_fn=None, torchmetrics=None):
+    if torchmetrics is None: torchmetrics = []
+    device = masks.device
     
+    # Ensure preds and masks are compatible with CPU slicing if large
+    preds = preds.cpu()
+    masks = masks.long().cpu()
+    
+    _, _, H, W = preds.shape
+
+    # Tile size logic
+    tile_size = int(input_size * batch_size**0.5)
+    h, w = (H // (H // tile_size + 1), W // (W // tile_size + 1))
+
+    losses = []
+    for y in range(0, H, h):
+        for x in range(0, W, w):
+            y_end = min(y + h, H)
+            x_end = min(x + w, W)
+            preds_tile = preds[:, :, y:y_end, x:x_end].to(device)
+            masks_tile = masks[:, y:y_end, x:x_end].to(device)
+            
+            if loss_fn is not None:
+                losses.append(loss_fn(preds_tile, masks_tile))
+            for torchmetric in torchmetrics:
+                torchmetric.update(preds_tile, masks_tile)
+                    
+    loss = torch.stack(losses).mean() if loss_fn is not None else None
+    return loss
+
 def patchify(imgs, p):
     # (B, C, H, W) -> (B, N, D)
     B, C, H, W = imgs.shape
