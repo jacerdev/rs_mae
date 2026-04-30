@@ -2,31 +2,31 @@
 seed: 42
 patch_size: 8 # img_size must be divisible by `2*patch_size` for the FPN segmentation head
 
-ckpt_export_path: best_ckpt.txt
-
 defaults:
   - _self_
   - paths: cluster
   - segmentation_ds: reben_7k
 
+experiment_name: "baseline"
+ckpt_export_path: "best_ckpt_${experiment_name}.txt"
+
 # Training hyperparameters
 accumulate_grad_batches: 1
 max_epochs: 100
-base_lr: 1e-4
+early_stop_patience: 30
+base_lr: 1.5e-4
 warmup_frac: 0.05
-layer_lr_decay: 0.75
-early_stop_patience: 15
+layer_lr_decay: 0.65
 
 weight_decay: 0.05
 gradient_clip_val: 1.0
 precision: "16-mixed"
 
 # Hardware
-num_workers: 10
+num_workers: 8
 prefetch_factor: 4
 
 # Logging
-experiment_name: "baseline"
 wandb:
   project: "RS_MAE-Thesis"
   run_name: "${experiment_name}-${dataset_name}-${now:%m.%d_%H:%M}"

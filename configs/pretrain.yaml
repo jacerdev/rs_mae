@@ -7,12 +7,12 @@ patch_size: 8
 mask_ratio: 0.75
 max_epochs: 100
 
-ckpt_export_path: best_ckpt.txt
-
 defaults:
   - _self_
   - paths: cluster
   - experiment: baseline
+  
+ckpt_export_path: "best_ckpt_${experiment_name}.txt"
 
 ### Training hyperparameters ###
 batch_size: 512

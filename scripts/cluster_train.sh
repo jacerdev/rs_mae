@@ -38,42 +38,63 @@ free -h
 echo -e "• Node: $(hostname) • SLURM_JOB_NODELIST: $SLURM_JOB_NODELIST\n• SLURM_CPUS_ON_NODE: $SLURM_CPUS_ON_NODE\n• SLURM_GTIDS: $SLURM_GTIDS"
 echo "Using python: $(which python)"
 
+# --------------------------------------------------
+
 if [ -z "$1" ]; then
-    echo "Usage: sbatch $0 <experiment_name> [hydra_overrides...]"
+    echo "Usage: sbatch $0 <experiment_name_1> [experiment_name_2...] [hydra_overrides...]"
     exit 1
 fi
-experiment=$1
-shift
 
-send_telegram "Experiment: $experiment"
+# Parse experiment names (stop at the first hydra override containing '=')
+experiments=()
+while [[ $# -gt 0 && "$1" != *=* ]]; do
+    experiments+=("$1")
+    shift
+done
+overrides="$@"
 
-echo "--------------------------------------------------"
-send_telegram "🚀 Pretraining [$(date "+%Y-%m-%d %H:%M:%S")]"
-python -m train.pretrain experiment="$experiment" "$@" &
-child_pid=$!
-wait "$child_pid"
-echo "--------------------------------------------------"
-send_telegram "🚀 Finetuning 1: reben_7k"
-python -m train.finetune experiment_name="$experiment" segmentation_ds=reben_7k "$@" &
-child_pid=$!
-wait "$child_pid"
-echo "--------------------------------------------------"
-send_telegram "🚀 Finetuning 2: sen1floods11"
-python -m train.finetune experiment_name="$experiment" segmentation_ds=sen1floods11 "$@" &
-child_pid=$!
-wait "$child_pid"
-echo "--------------------------------------------------"
-send_telegram "🚀 Finetuning 3: cashew_plantation"
-python -m train.finetune experiment_name="$experiment" segmentation_ds=cashew_plantation "$@" &
-child_pid=$!
-wait "$child_pid"
-echo "--------------------------------------------------"
-send_telegram "🚀 Finetuning 4: c2seg"
-python -m train.finetune experiment_name="$experiment" segmentation_ds=c2seg "$@" &
-child_pid=$!
-wait "$child_pid"
-# echo "--------------------------------------------------"
-# send_telegram "🚀 Finetuning 5: burn_scars"
-# python -m train.finetune experiment_name="$experiment" segmentation_ds=burn_scars "$@" &
-# child_pid=$!
-# wait "$child_pid"
+datasets=("reben_7k" "sen1floods11" "cashew_plantation" "c2seg")
+
+echo "=================================================="
+send_telegram "🚀 Starting Pretraining for: ${experiments[*]}"
+echo "=================================================="
+
+for experiment in "${experiments[@]}"; do
+    python -m train.pretrain experiment="$experiment" $overrides &
+    echo "Started pretraining for $experiment (PID: $!)"
+done
+
+wait
+
+for experiment in "${experiments[@]}"; do
+    echo "=================================================="
+    send_telegram "🧬 Starting Finetuning: $experiment"
+    echo "=================================================="
+
+    # Loop over datasets with a 2-step jump for parallel batching
+    for ((i=0; i<${#datasets[@]}; i+=2)); do
+        ds1=${datasets[$i]}
+        ds2=${datasets[$i+1]}
+
+        echo "--------------------------------------------------"
+        send_telegram "🚀 Batch: $ds1 & $ds2 ($experiment)"
+        
+        # Launch first dataset in background
+        python -m train.finetune \
+            experiment_name="$experiment" \
+            segmentation_ds="$ds1" $overrides &
+        pid1=$!
+
+        # Launch second dataset in background (if it exists)
+        if [ ! -z "$ds2" ]; then
+            python -m train.finetune \
+                experiment_name="$experiment" \
+                segmentation_ds="$ds2" $overrides &
+            pid2=$!
+        fi
+
+        wait $pid1 $pid2
+    done
+done
+
+send_telegram "✅ All experiments and datasets finished."
