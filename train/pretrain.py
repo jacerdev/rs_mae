@@ -12,6 +12,7 @@ from pathlib import Path
 import torch
 import wandb
 
+from train.callbacks import TrainingStateCallback
 from train.lightning_modules import ReBENDataModule, MAEModule
 from utils.config import ReBENDataset_Cfg, MaskedAutoencoderViT_Cfg
 
@@ -71,8 +72,8 @@ def main(cfg: DictConfig):
     model = MAEModule(
         model_cfg=model_cfg,
         mask_ratio=cfg.mask_ratio,
-        warmup_frac=cfg.warmup_frac,
         base_lr=cfg.base_lr,
+        warmup_frac=cfg.warmup_frac,
         weight_decay=cfg.weight_decay,
         bands=cfg.bands)
 
@@ -93,7 +94,7 @@ def main(cfg: DictConfig):
         devices="auto",
         strategy="ddp" if torch.cuda.device_count() > 1 else "auto",
         logger=wandb_logger,
-        callbacks=[checkpoint_callback, lr_monitor],
+        callbacks=[checkpoint_callback, lr_monitor, TrainingStateCallback()],
         plugins=[AsyncCheckpointIO()],
         precision=cfg.precision,
         log_every_n_steps=cfg.log_every_n_steps,

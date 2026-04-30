@@ -12,11 +12,9 @@ defaults:
 # Training hyperparameters
 accumulate_grad_batches: 1
 max_epochs: 100
-base_lr: 3e-5
-layer_lr_decay: 0.85
-reduce_lr_factor: 0.5
-reduce_lr_threshold: 1e-2
-reduce_lr_patience: 4
+base_lr: 1e-4
+warmup_frac: 0.05
+layer_lr_decay: 0.75
 early_stop_patience: 15
 
 weight_decay: 0.05

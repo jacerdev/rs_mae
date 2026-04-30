@@ -1,6 +1,7 @@
 from dataclasses import asdict
 import lightning as L
 import logging
+import math
 import torch
 import torch.nn as nn
 import torchvision.utils as vutils
@@ -18,9 +19,7 @@ DECODER_LR_SCALER = 10 # uninitialized_weights_lr = pretrained_weights_lr * DECO
 class SegmentationViTModule(L.LightningModule):
     def __init__(self, model_cfg: SegmentationViT_Cfg,
                  base_lr,
-                 reduce_lr_factor,
-                 reduce_lr_threshold,
-                 reduce_lr_patience,
+                 warmup_frac,
                  layer_lr_decay,
                  weight_decay,
                  bands=None, dataset_name=None):
@@ -29,9 +28,7 @@ class SegmentationViTModule(L.LightningModule):
         self.save_hyperparameters()
         self.model_cfg = model_cfg
         self.base_lr = base_lr
-        self.reduce_lr_factor = reduce_lr_factor
-        self.reduce_lr_threshold = reduce_lr_threshold
-        self.reduce_lr_patience = reduce_lr_patience
+        self.warmup_frac = warmup_frac
         self.layer_lr_decay = layer_lr_decay
         self.weight_decay = weight_decay
 
@@ -52,11 +49,6 @@ class SegmentationViTModule(L.LightningModule):
 
     def forward(self, x):
         return self.model(x)
-
-    def on_train_epoch_end(self):
-        # update grid sampling offsets for the next epoch (SegmentationDataset.set_epoch)
-        if hasattr(self.trainer.datamodule.train_ds, "set_epoch"):
-            self.trainer.datamodule.train_ds.set_epoch(self.trainer.current_epoch + 1)
 
     def training_step(self, batch, batch_idx):
         imgs, masks = batch
@@ -124,11 +116,9 @@ class SegmentationViTModule(L.LightningModule):
         if self.trainer.accumulate_grad_batches > 1:
             effective_batch_size *= self.trainer.accumulate_grad_batches
             
-        logging.info(f"Effective batch size: {effective_batch_size}")
-
         scaled_backbone_lr = self.base_lr * effective_batch_size / REFERENCE_BATCH_SIZE
         scaled_decoder_lr = scaled_backbone_lr * DECODER_LR_SCALER
-        logging.info(f"Scaled Backbone LR: {scaled_backbone_lr:.6f} | Scaled Decoder LR: {scaled_decoder_lr:.6f}")
+        logging.info(f"Effective batch size: {effective_batch_size} | Scaled Backbone LR: {scaled_backbone_lr:.6f} | Scaled Decoder LR: {scaled_decoder_lr:.6f}")
         
         # retrieve the custom parameter groups
         param_groups = get_parameter_groups_llrd(self.model, weight_decay=self.weight_decay,
@@ -137,12 +127,28 @@ class SegmentationViTModule(L.LightningModule):
         optimizer = torch.optim.AdamW(param_groups, betas=(0.9, 0.999))
 
         # scheduler
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min",
-                                                factor=self.reduce_lr_factor, patience=self.reduce_lr_patience, threshold=self.reduce_lr_threshold,
-                                                min_lr=1e-6)
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min",
+        #                                         factor=self.reduce_lr_factor, patience=self.reduce_lr_patience, threshold=self.reduce_lr_threshold,
+        #                                         min_lr=1e-6)
 
-        return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "monitor": "val_loss",
-                                                        "interval": "epoch", "frequency": 1}}
+        # return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "monitor": "val_loss",
+        #                                                 "interval": "epoch", "frequency": 1}}
+
+        # scheduler (linear warmup + cosine annealing)
+        total_steps = self.trainer.estimated_stepping_batches
+        warmup_steps = int(self.warmup_frac * total_steps)
+
+        def lr_lambda(current_step):
+            if current_step < warmup_steps:
+                return float(current_step) / float(max(1, warmup_steps))
+            
+            # cosine decay
+            progress = float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps))
+            return 0.5 * (1.0 + math.cos(math.pi * progress))
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+        return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "interval": "step"}}
 
     def _log_predictions(self, outputs, split):
         imgs, preds, masks = outputs["imgs"].detach(), outputs["preds"].detach(), outputs["masks"].detach()

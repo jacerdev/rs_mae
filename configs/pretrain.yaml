@@ -17,8 +17,8 @@ defaults:
 ### Training hyperparameters ###
 batch_size: 512
 accumulate_grad_batches: 1
-warmup_frac: 0.1
 base_lr: 3e-4
+warmup_frac: 0.1
 
 weight_decay: 0.05
 gradient_clip_val: 1.0

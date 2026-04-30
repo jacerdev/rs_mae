@@ -6,6 +6,8 @@ __pycache__/
 /todos.txt
 context.md
 reben_profiled.py
+/runs.json
+
 
 # Folders
 /checkpoints/

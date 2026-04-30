@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from models.strategies.masker.base import Masker
+from train.callbacks import TRAINING_STATE
 
 
 class CurriculumMasker(nn.Module, Masker):
@@ -13,15 +14,12 @@ class CurriculumMasker(nn.Module, Masker):
         Masker.__init__(self, **kwargs)
         self.saliency_extractor = saliency_extractor
         self.max_epochs = max_epochs
-        self.epoch = 0
 
         self.min_w = min_w
         self.max_w = max_w
         self.easy_end = easy_end
         self.hard_start = hard_start
 
-    def set_epoch(self, epoch):
-        self.epoch = epoch
 
     def compute_masking_score(self, saliency, epoch, max_epochs):
         """
@@ -67,7 +65,7 @@ class CurriculumMasker(nn.Module, Masker):
                 raise ValueError("raw_imgs must be provided for CurriculumMasker in curriculum phase")
 
             saliency = self.get_normalized_saliency(raw_imgs).flatten(1) # (B, N)
-            scores = self.compute_masking_score(saliency, self.epoch, self.max_epochs)
+            scores = self.compute_masking_score(saliency, TRAINING_STATE.epoch, self.max_epochs)
         
         else: # val: random masking
             B, N, D = x.shape
@@ -87,14 +85,14 @@ if __name__ == "__main__":
     masking = CurriculumMasker(saliency_extractor=lambda _: saliency, max_epochs=10)
     
     # Test batch 0 saliency: [0.1, 0.9, 0.2, 0.8]
-    masking.set_epoch(0)
+    TRAINING_STATE.epoch = 0
     _, _, ids_keep, _ = masking(x, mask_ratio=0.5, raw_imgs=x)
     print(f"Epoch 0  (Easy) - Keep indices (expected 1, 3): {ids_keep[0].tolist()}")
 
-    masking.set_epoch(5)
+    TRAINING_STATE.epoch = 5
     _, _, ids_keep, _ = masking(x, mask_ratio=0.5, raw_imgs=x)
     print(f"Epoch 5  (Rand) - Keep indices: {ids_keep[0].tolist()}")
 
-    masking.set_epoch(10)
+    TRAINING_STATE.epoch = 10
     _, _, ids_keep, _ = masking(x, mask_ratio=0.5, raw_imgs=x)
     print(f"Epoch 10 (Hard) - Keep indices (expected 0, 2): {ids_keep[0].tolist()}")

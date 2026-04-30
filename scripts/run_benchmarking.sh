@@ -14,13 +14,13 @@ echo "🎓 Testing 1.1: reben_7k"
 python -m test.benchmark "$@" experiment_name=$experiment segmentation_ds=reben_7k paths=local
 echo "--------------------------------------------------"
 echo "🎓 Testing 1.2: reben_7k (Out-Of-Distribution Set)"
-python -m test.benchmark "$@" experiment_name=$experiment segmentation_ds=reben_7k +ood_split=ood paths=local
+python -m test.benchmark "$@" experiment_name=$experiment segmentation_ds=reben_7k paths=local +ood_split=ood
 echo "--------------------------------------------------"
 echo "🎓 Testing 2.1: sen1floods11"
 python -m test.benchmark "$@" experiment_name=$experiment segmentation_ds=sen1floods11 paths=local
 echo "--------------------------------------------------"
 echo "🎓 Testing 2.2: sen1floods11 (Out-Of-Distribution Set)"
-python -m test.benchmark "$@" experiment_name=$experiment segmentation_ds=sen1floods11 +ood_split=bolivia paths=local
+python -m test.benchmark "$@" experiment_name=$experiment segmentation_ds=sen1floods11 paths=local +ood_split=bolivia
 echo "--------------------------------------------------"
 echo "🎓 Testing 3: cashew_plantation"
 python -m test.benchmark "$@" experiment_name=$experiment segmentation_ds=cashew_plantation paths=local

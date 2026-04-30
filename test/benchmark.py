@@ -18,13 +18,13 @@ from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2Se
 from models.segmentation.segmentation_vit import SegmentationViT
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
 from utils.spatial_ops import windowed_inference, windowed_evaluation
-from utils.utils import get_checkpoint_path, save_results
+from utils.utils import get_checkpoint_path
 from utils.visualization import plot_images, prepare_segmentation_visuals
 
-batch_size = 128
+batch_size = 16
 num_workers = 4
 prefetch_factor = 2
-artifacts_dir = "/mnt/ssd/trained_models/"
+artifacts_dir = "/mnt/ssd/.FINISHED_RUNS"
 
 class EvaluationDataset(torch.utils.data.Dataset):
     def __init__(self, ds):
@@ -100,7 +100,7 @@ def main(cfg: DictConfig):
         model = SegmentationViT(**asdict(model_cfg))
 
         # Checkpoint
-        ckpt_path = get_checkpoint_path(cfg.experiment_name, cfg.dataset_name, artifacts_dir)
+        ckpt_path = get_checkpoint_path(cfg.experiment_name, cfg.dataset_name, artifacts_dir, wandb_project=cfg.wandb.project)
         try:
             state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
             state_dict = state.get("state_dict", state)
@@ -154,6 +154,7 @@ def main(cfg: DictConfig):
                         preds_list.append(pred)
                     preds = torch.stack(preds_list, dim=0) # (B, C, H, W) on CPU
                 # Save each result
+                #logging.info(f"Saving outputs..")
                 for i in range(len(imgs)):
                     sample_id = sample_ids[i]
                     torch.save(preds[i:i+1].cpu().clone(), cache_dir / f"{sample_id}.pt")
@@ -184,14 +185,14 @@ def main(cfg: DictConfig):
                f"IoU":  iou.compute().item(),
                f"F1":   f1.compute().item()}
     
-    save_results(results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split, csv_path="results.csv")
+    log_results(results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split, csv_path="results.csv")
     
     for k, v in results.items():
         print(f"{k}: {v:.4f}")
 
     return results
 
-def save_results(results, dataset_name, experiment_name, ood_split=None, csv_path="results.csv"):
+def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path="results.csv"):
     """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
     display_name = (dataset_name + ("_" + ood_split if ood_split else "")) \
         .replace("_", " ").title().strip()

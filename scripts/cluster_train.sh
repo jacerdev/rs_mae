@@ -49,31 +49,31 @@ send_telegram "Experiment: $experiment"
 
 echo "--------------------------------------------------"
 send_telegram "🚀 Pretraining [$(date "+%Y-%m-%d %H:%M:%S")]"
-python -m train.pretrain "$@" experiment="$experiment" &
+python -m train.pretrain experiment="$experiment" "$@" &
 child_pid=$!
 wait "$child_pid"
 echo "--------------------------------------------------"
 send_telegram "🚀 Finetuning 1: reben_7k"
-python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=reben_7k &
+python -m train.finetune experiment_name="$experiment" segmentation_ds=reben_7k "$@" &
 child_pid=$!
 wait "$child_pid"
 echo "--------------------------------------------------"
 send_telegram "🚀 Finetuning 2: sen1floods11"
-python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=sen1floods11 &
+python -m train.finetune experiment_name="$experiment" segmentation_ds=sen1floods11 "$@" &
 child_pid=$!
 wait "$child_pid"
 echo "--------------------------------------------------"
 send_telegram "🚀 Finetuning 3: cashew_plantation"
-python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=cashew_plantation &
+python -m train.finetune experiment_name="$experiment" segmentation_ds=cashew_plantation "$@" &
 child_pid=$!
 wait "$child_pid"
 echo "--------------------------------------------------"
 send_telegram "🚀 Finetuning 4: c2seg"
-python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=c2seg &
+python -m train.finetune experiment_name="$experiment" segmentation_ds=c2seg "$@" &
 child_pid=$!
 wait "$child_pid"
 # echo "--------------------------------------------------"
 # send_telegram "🚀 Finetuning 5: burn_scars"
-# python -m train.finetune "$@" experiment_name="$experiment" segmentation_ds=burn_scars &
+# python -m train.finetune experiment_name="$experiment" segmentation_ds=burn_scars "$@" &
 # child_pid=$!
 # wait "$child_pid"

@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from models.strategies.loss.base import ReconstructionLoss
 from models.strategies.loss.mse import MaskedMSELoss
+from train.callbacks import TRAINING_STATE
 from utils.spatial_ops import unpatchify
 
 
@@ -17,10 +18,7 @@ class FFTEnhancedLoss(ReconstructionLoss):
         self.base_lambda_phase = lambda_phase
         self.warmup_epochs = warmup_epochs
         self.norm = norm
-        self.epoch = 0
 
-    def set_epoch(self, epoch):
-        self.epoch = epoch
 
     def __call__(self, pred, target, mask, **kwargs):
         # Spatial pixel loss (MSE)
@@ -55,7 +53,7 @@ class FFTEnhancedLoss(ReconstructionLoss):
             phase_total = (1 - torch.cos(phase_diff)).mean() # avoid wrap-around issues (circular phase), grads of 1-cos are smoother at 0
         
         # Calculate current weights based on warmup
-        scale = min(1.0, self.epoch / max(1, self.warmup_epochs))
+        scale = min(1.0, TRAINING_STATE.epoch / max(1, self.warmup_epochs))
         curr_lambda_amp = self.base_lambda_amp * scale
         curr_lambda_phase = self.base_lambda_phase * scale
 

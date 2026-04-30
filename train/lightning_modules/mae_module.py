@@ -18,8 +18,8 @@ REFERENCE_BATCH_SIZE = 256
 class MAEModule(L.LightningModule):
     def __init__(self, model_cfg: MaskedAutoencoderViT_Cfg,
                  mask_ratio,
-                 warmup_frac,
                  base_lr,
+                 warmup_frac,
                  weight_decay,
                  bands=None):
         super().__init__()
@@ -27,8 +27,8 @@ class MAEModule(L.LightningModule):
         self.save_hyperparameters()
         self.model_cfg = model_cfg
         self.mask_ratio = mask_ratio
-        self.warmup_frac = warmup_frac
         self.base_lr = base_lr
+        self.warmup_frac = warmup_frac
         self.weight_decay = weight_decay
         self.bands = bands
 
@@ -39,12 +39,6 @@ class MAEModule(L.LightningModule):
 
     def forward(self, x):
         return self.model(x, mask_ratio=self.mask_ratio)
-
-    def on_train_epoch_end(self):
-        if hasattr(self.model, "masker") and hasattr(self.model.masker, "set_epoch"):
-            self.model.masker.set_epoch(self.current_epoch + 1)
-        if hasattr(self.model, "loss") and hasattr(self.model.loss, "set_epoch"):
-            self.model.loss.set_epoch(self.current_epoch + 1)
 
     def training_step(self, batch, batch_idx):
         loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio)

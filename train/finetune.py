@@ -15,6 +15,7 @@ import wandb
 
 from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset
 from models.segmentation.segmentation_vit import load_pretrained_encoder_weights
+from train.callbacks import TrainingStateCallback
 from train.lightning_modules import SegmentationDataModule, SegmentationViTModule
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
 
@@ -83,9 +84,7 @@ def main(cfg: DictConfig):
     model = SegmentationViTModule(
         model_cfg=model_cfg,
         base_lr=cfg.base_lr,
-        reduce_lr_factor=cfg.reduce_lr_factor,
-        reduce_lr_threshold=cfg.reduce_lr_threshold,
-        reduce_lr_patience=cfg.reduce_lr_patience,
+        warmup_frac=cfg.warmup_frac,
         layer_lr_decay=cfg.layer_lr_decay,
         weight_decay=cfg.weight_decay,
         bands=cfg.dataset.bands, dataset_name=cfg.dataset_name)
@@ -95,10 +94,9 @@ def main(cfg: DictConfig):
                                           filename="seg-{epoch:02d}-{val_loss:.4f}")
     lr_monitor = LearningRateMonitor(logging_interval='step')
     early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=cfg.early_stop_patience)
-    
-    callbacks = [checkpoint_callback, lr_monitor, early_stopping]
+    callbacks = [checkpoint_callback, lr_monitor, early_stopping, TrainingStateCallback()]
     if Path("/content/drive/My Drive").exists():
-        from utils.utils import CheckpointSyncCallback
+        from train.callbacks import CheckpointSyncCallback
         checkpoints_dir = Path(cfg.wandb.outdir) / cfg.wandb.project
         callbacks.append(CheckpointSyncCallback(checkpoints_dir))
 
