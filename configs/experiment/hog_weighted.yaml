@@ -19,6 +19,6 @@ loss:
   _target_: models.strategies.loss.SaliencyWeightedLoss
   patch_size: ${patch_size}
   warmup_epochs: 20
-  saliency_scale: 0.75
+  saliency_scale: 1.0
 
 use_last_ckpt: true

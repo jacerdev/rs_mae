@@ -36,8 +36,10 @@ class SaliencyWeightedLoss(nn.Module, ReconstructionLoss):
             
         # scale starts at 0 and goes to 1 linearly over warmup_epochs
         scale = min(1.0, TRAINING_STATE.epoch / max(1, self.warmup_epochs))
-        patch_weights = 1.0 + (self.saliency_scale *scale * s_norm)
-        
+        patch_weights = 1.0 + (self.saliency_scale * scale * s_norm)
+        # Normalize weights so the mean is 1.0, preserving global learning rate
+        patch_weights = patch_weights / patch_weights.mean(dim=-1, keepdim=True)
+
         mse_per_patch = (pred - target).pow(2).mean(dim=-1)  # (B, N)
         weighted_mse = mse_per_patch * patch_weights * mask  # (B, N)
         
