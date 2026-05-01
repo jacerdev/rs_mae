@@ -5,7 +5,7 @@
 #SBATCH --mem=200G
 #SBATCH --cpus-per-gpu=26
 #SBATCH --partition=gpu_short
-#SBATCH --time=0-12:00:00
+#SBATCH --time=0-14:00:00
 
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=aloui@campus.tu-berlin.de
@@ -53,43 +53,46 @@ while [[ $# -gt 0 && "$1" != *=* ]]; do
 done
 overrides="$@"
 
-datasets=("reben_7k" "sen1floods11" "cashew_plantation" "c2seg")
+# Loop over experiments with a 2-step jump for parallel pretraining
+for ((i=0; i<${#experiments[@]}; i+=2)); do
+    exp1=${experiments[$i]}
+    exp2=${experiments[$i+1]}
 
-echo "=================================================="
-send_telegram "🚀 Starting Pretraining for: ${experiments[*]}"
-echo "=================================================="
+    echo "=================================================="
+    send_telegram "🚀 Pretraining: $exp1 & $exp2"
+    echo "=================================================="
 
-for experiment in "${experiments[@]}"; do
-    python -m train.pretrain experiment="$experiment" $overrides &
-    echo "Started pretraining for $experiment (PID: $!)"
+    python -m train.pretrain experiment="$exp1" $overrides &
+    pid1=$!
+
+    if [ ! -z "$exp2" ]; then # run 2nd experiment in parallel if exists
+        python -m train.pretrain experiment="$exp2" $overrides &
+        pid2=$!
+    fi
+
+    wait $pid1 $pid2
 done
 
-wait
 
+datasets=("reben_7k" "cashew_plantation" "sen1floods11" "c2seg")
+
+# Loop over datasets with a 2-step jump for parallel finetuning
 for experiment in "${experiments[@]}"; do
-    echo "=================================================="
-    send_telegram "🧬 Starting Finetuning: $experiment"
-    echo "=================================================="
-
-    # Loop over datasets with a 2-step jump for parallel batching
     for ((i=0; i<${#datasets[@]}; i+=2)); do
         ds1=${datasets[$i]}
         ds2=${datasets[$i+1]}
 
-        echo "--------------------------------------------------"
-        send_telegram "🚀 Batch: $ds1 & $ds2 ($experiment)"
-        
-        # Launch first dataset in background
+        echo "=================================================="
+        send_telegram "🚀 Finetuning $experiment: $ds1 & $ds2"
+        echo "=================================================="
+
         python -m train.finetune \
-            experiment_name="$experiment" \
-            segmentation_ds="$ds1" $overrides &
+            experiment_name="$experiment" segmentation_ds="$ds1" $overrides &
         pid1=$!
 
-        # Launch second dataset in background (if it exists)
-        if [ ! -z "$ds2" ]; then
+        if [ ! -z "$ds2" ]; then # run 2nd dataset in parallel if exists
             python -m train.finetune \
-                experiment_name="$experiment" \
-                segmentation_ds="$ds2" $overrides &
+                experiment_name="$experiment" segmentation_ds="$ds2" $overrides &
             pid2=$!
         fi
 

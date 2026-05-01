@@ -90,10 +90,15 @@ def main(cfg: DictConfig):
         bands=cfg.dataset.bands, dataset_name=cfg.dataset_name)
 
     # Callbacks
-    checkpoint_callback = ModelCheckpoint(monitor="val_iou", mode="max", save_last=True, save_top_k=5,
-                                          filename="seg-{epoch:02d}-{val_iou:.4f}")
+    if dataset_class == C2SegDataset:
+        monitor, mode, filename = "val_loss", "min", "seg-{epoch:02d}-{val_loss:.4f}"
+    else:
+        monitor, mode, filename = "val_iou", "max", "seg-{epoch:02d}-{val_iou:.4f}"
+    
     lr_monitor = LearningRateMonitor(logging_interval='step')
-    early_stopping = EarlyStopping(monitor="val_iou", mode="max", patience=cfg.early_stop_patience)
+    checkpoint_callback = ModelCheckpoint(monitor=monitor, mode=mode, save_last=True, save_top_k=5,
+                                          filename=filename)
+    early_stopping = EarlyStopping(monitor=monitor, mode=mode, patience=cfg.early_stop_patience)
     callbacks = [checkpoint_callback, lr_monitor, early_stopping, TrainingStateCallback()]
     if Path("/content/drive/My Drive").exists():
         from train.callbacks import CheckpointSyncCallback

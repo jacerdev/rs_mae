@@ -1,0 +1,7 @@
+Class,Baseline,Feat Guided,Curriculum Ndi,Curriculum Hog,Hog Weighted
+Well-managed plantation,56.37,53.30,56.67,56.28,53.56
+Poorly-managed plantation,73.07,72.94,74.05,73.50,72.57
+Non-plantation,61.97,60.74,64.12,62.08,61.81
+Residential,88.74,86.91,88.05,88.52,88.89
+Background_cashew,79.23,79.28,79.98,79.26,79.24
+Uncertain,10.78,12.32,8.76,6.68,9.93

@@ -1,0 +1,20 @@
+Class,Baseline,Feat Guided,Curriculum Ndi,Curriculum Hog,Hog Weighted
+Urban fabric,69.51,71.63,68.08,69.49,68.36
+Industrial or commercial units,51.74,58.76,61.06,59.35,57.45
+Arable land,75.67,76.02,73.52,73.77,75.27
+Permanent crops,19.56,2.82,24.83,21.77,13.83
+Pastures,71.24,62.97,67.27,60.42,59.26
+Complex cultivation patterns,26.26,17.64,27.21,24.47,19.35
+"Land principally occupied by agriculture, with significant areas of natural vegetation",14.01,11.59,13.46,14.67,13.71
+Agro-forestry areas,0.00,0.00,0.00,0.00,0.00
+Broad-leaved forest,57.26,57.89,59.30,58.27,58.11
+Coniferous forest,67.12,55.18,66.71,65.31,66.01
+Mixed forest,31.90,38.18,30.71,36.73,31.63
+Natural grassland and sparsely vegetated areas,21.00,23.19,23.10,18.06,21.43
+"Moors, heathland and sclerophyllous vegetation",9.95,11.12,7.93,4.67,9.51
+"Transitional woodland, shrub",16.21,21.18,20.15,23.52,17.89
+"Beaches, dunes, sands",7.25,21.73,6.92,3.30,5.58
+Inland wetlands,40.42,26.71,35.16,36.71,37.10
+Coastal wetlands,31.68,24.86,23.85,34.49,32.79
+Inland waters,71.29,78.98,75.16,76.00,75.05
+Marine waters,97.82,98.66,98.31,98.44,98.39

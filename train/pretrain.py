@@ -80,12 +80,11 @@ def main(cfg: DictConfig):
         bands=cfg.bands)
 
     # Callbacks
-    if cfg.get("use_last_ckpt", False):
-        checkpoint_callback = ModelCheckpoint(monitor=None, save_last=True,
-                                            filename="mae-{epoch:02d}-{val_loss:.4f}")
-    else:
-        checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_last=True, save_top_k=2,
-                                            filename="mae-{epoch:02d}-{val_loss:.4f}")
+    monitor, save_top_k = "val_loss", 2
+    if cfg.get("use_last_ckpt", False): monitor, save_top_k = None, 1
+
+    checkpoint_callback = ModelCheckpoint(monitor=monitor, mode="min", save_last=True, save_top_k=save_top_k,
+                                        filename="mae-{epoch:02d}-{val_loss:.4f}")
     lr_monitor = LearningRateMonitor(logging_interval='step')
 
     # Trainer

@@ -191,7 +191,7 @@ def main(cfg: DictConfig):
                f"mIoU": iou.compute().item(),
                f"mF1": f1_per_class.nanmean().item()}
     
-    log_results(results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split, csv_path="results.csv")
+    log_results(results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split, csv_path="results/benchmark_results.csv")
     
     per_class_results = {}
     for idx, f1_val in enumerate(f1_per_class):
@@ -217,7 +217,7 @@ def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path
 
     # load or initialize
     if csv_path.exists():
-        df = pd.read_csv(csv_path)
+        df = pd.read_csv(csv_path, dtype=str)
     else:
         df = pd.DataFrame(columns=["Dataset", "Metric"])
 
@@ -260,17 +260,17 @@ def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path
     df_out["Dataset"] = df_out["Dataset"].where(
         df_out["Dataset"] != df_out["Dataset"].shift(), "")
 
-    df_out.to_csv(csv_path, index=False)
+    df_out.to_csv(csv_path, index=False, float_format="%.2f")
 
 def log_per_class_results(results, dataset_name, experiment_name, ood_split=None):
     """results: dict mapping class names to F1 values"""
     experiment_col = experiment_name.replace("_", " ").title().strip()
     
-    csv_name = dataset_name + ("_" + ood_split if ood_split else "") + ".csv"
+    csv_name = "results/" + dataset_name + ("_" + ood_split if ood_split else "") + ".csv"
     csv_path = Path(csv_name)
     
     if csv_path.exists():
-        df = pd.read_csv(csv_path)
+        df = pd.read_csv(csv_path, dtype=str)
     else:
         df = pd.DataFrame(columns=["Class"])
         
@@ -293,7 +293,7 @@ def log_per_class_results(results, dataset_name, experiment_name, ood_split=None
             }
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             
-    df.to_csv(csv_path, index=False)
+    df.to_csv(csv_path, index=False, float_format="%.2f")
 
 
 if __name__ == "__main__":
