@@ -42,6 +42,8 @@ def main(cfg: DictConfig):
             masker_kwargs = {"saliency_extractor": instantiate(cfg.saliency_extractor)}
         case "fourier_loss":
             pass
+        case "hog_weighted":
+            loss_kwargs = {"saliency_extractor": instantiate(cfg.saliency_extractor)}
         case _:
             raise ValueError("Experiment not recognized.")
 

@@ -21,8 +21,11 @@ from utils.spatial_ops import windowed_inference, windowed_evaluation
 from utils.utils import get_checkpoint_path
 from utils.visualization import plot_images, prepare_segmentation_visuals
 
+SAVE_PREDS = False
+PLOT_RESULTS = False
+
 batch_size = 16
-num_workers = 4
+num_workers = 2
 prefetch_factor = 2
 artifacts_dir = "/mnt/ssd/.FINISHED_RUNS"
 
@@ -113,11 +116,10 @@ def main(cfg: DictConfig):
         model = model.to(device).eval()
 
     # Metrics
-    num_classes = cfg.num_classes
     loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
-    acc  = MulticlassAccuracy(num_classes=num_classes, ignore_index=-1, average='micro').to(device)
-    iou  = JaccardIndex(task="multiclass", num_classes=num_classes, ignore_index=-1).to(device)
-    f1   = F1Score(task="multiclass", num_classes=num_classes, ignore_index=-1, average='macro').to(device)
+    acc  = MulticlassAccuracy(num_classes=cfg.num_classes, ignore_index=-1, average='micro').to(device)
+    iou  = JaccardIndex(task="multiclass", num_classes=cfg.num_classes, ignore_index=-1, average='macro').to(device)
+    f1   = F1Score(task="multiclass", num_classes=cfg.num_classes, ignore_index=-1, average='none').to(device)
 
     # Inference
     total_loss = 0.0
@@ -148,16 +150,17 @@ def main(cfg: DictConfig):
                         pred = windowed_inference(model=model, image=sample,
                                                 window_size=input_size,
                                                 stride=input_size // 2,
-                                                num_classes=num_classes,
+                                                num_classes=cfg.num_classes,
                                                 batch_size=batch_size,
                                                 merger_device='cpu')
                         preds_list.append(pred)
                     preds = torch.stack(preds_list, dim=0) # (B, C, H, W) on CPU
                 # Save each result
-                #logging.info(f"Saving outputs..")
-                for i in range(len(imgs)):
-                    sample_id = sample_ids[i]
-                    torch.save(preds[i:i+1].cpu().clone(), cache_dir / f"{sample_id}.pt")
+                if SAVE_PREDS:
+                    #logging.info(f"Saving outputs..")
+                    for i in range(len(imgs)):
+                        sample_id = sample_ids[i]
+                        torch.save(preds[i:i+1].cpu().clone(), cache_dir / f"{sample_id}.pt")
 
             # Evaluation
             if H <= input_size and W <= input_size:
@@ -176,25 +179,36 @@ def main(cfg: DictConfig):
 
             total_loss += batch_loss
 
-            #imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(imgs.detach().cpu(), masks.detach().cpu(), preds.detach().cpu(),
-            #                                            bands=dataset_cfg.bands, dataset_name=cfg.dataset_name)
-            #plot_images(torch.stack([imgs_vis, gt_vis, pred_vis], dim=1).flatten(0,1), ncols=3)
+            if PLOT_RESULTS:
+                imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(imgs.detach().cpu(), masks.detach().cpu(), preds.detach().cpu(),
+                                                            bands=dataset_cfg.bands, dataset_name=cfg.dataset_name)
+                plot_images(torch.stack([imgs_vis, gt_vis, pred_vis], dim=1).flatten(0,1), ncols=3)
+
+    f1_per_class = f1.compute()
 
     results = {f"loss": total_loss / len(test_loader),
-               f"Acc":  acc.compute().item(),
-               f"IoU":  iou.compute().item(),
-               f"F1":   f1.compute().item()}
+               f"OA": acc.compute().item(),
+               f"mIoU": iou.compute().item(),
+               f"mF1": f1_per_class.nanmean().item()}
     
     log_results(results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split, csv_path="results.csv")
+    
+    per_class_results = {}
+    for idx, f1_val in enumerate(f1_per_class):
+        class_name = dataset_class.CLASSES.get(idx, f"Class {idx}")
+        per_class_results[class_name] = f1_val.item()
+
+    log_per_class_results(per_class_results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split)
     
     for k, v in results.items():
         print(f"{k}: {v:.4f}")
 
     return results
 
+
 def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path="results.csv"):
     """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
-    display_name = (dataset_name + ("_" + ood_split if ood_split else "")) \
+    dataset_name = (dataset_name + ("_" + ood_split if ood_split else "")) \
         .replace("_", " ").title().strip()
 
     experiment_col = experiment_name.replace("_", " ").title().strip()
@@ -210,7 +224,7 @@ def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path
     # normalize
     df = df.astype(object)
     df["Dataset"] = df["Dataset"].astype(str).str.strip().replace(r"^\s*$", pd.NA, regex=True).ffill()
-    df["Metric"] = df["Metric"].astype(str).str.strip().str.lower()
+    df["Metric"] = df["Metric"].astype(str).str.strip()
 
     # ensure column exists
     if experiment_col not in df.columns:
@@ -221,22 +235,22 @@ def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path
         if metric_name == "loss":
             continue
 
-        metric_name = metric_name.lower().strip()
+        metric_name = metric_name.strip()
 
-        mask = (df["Dataset"] == display_name) & (df["Metric"] == metric_name)
+        mask = (df["Dataset"] == dataset_name) & (df["Metric"] == metric_name)
 
         if mask.any():
             df.loc[mask, experiment_col] = f"{val*100:.2f}"
         else:
             new_row = {
-                "Dataset": display_name,
+                "Dataset": dataset_name,
                 "Metric": metric_name,
                 experiment_col: f"{val*100:.2f}"
             }
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
     # keep table structured
-    metric_order = ["acc", "iou", "f1"]
+    metric_order = ["OA", "mIoU", "mF1"]
     df["Metric"] = pd.Categorical(df["Metric"], categories=metric_order, ordered=True)
 
     df = df.sort_values(by=["Dataset", "Metric"]).reset_index(drop=True)
@@ -247,6 +261,40 @@ def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path
         df_out["Dataset"] != df_out["Dataset"].shift(), "")
 
     df_out.to_csv(csv_path, index=False)
+
+def log_per_class_results(results, dataset_name, experiment_name, ood_split=None):
+    """results: dict mapping class names to F1 values"""
+    experiment_col = experiment_name.replace("_", " ").title().strip()
+    
+    csv_name = dataset_name + ("_" + ood_split if ood_split else "") + ".csv"
+    csv_path = Path(csv_name)
+    
+    if csv_path.exists():
+        df = pd.read_csv(csv_path)
+    else:
+        df = pd.DataFrame(columns=["Class"])
+        
+    df = df.astype(object)
+    df["Class"] = df["Class"].astype(str).str.strip()
+    
+    if experiment_col not in df.columns:
+        df[experiment_col] = None
+        
+    for class_name, val in results.items():
+        class_name = str(class_name).strip()
+        mask = df["Class"] == class_name
+        
+        if mask.any():
+            df.loc[mask, experiment_col] = f"{val*100:.2f}"
+        else:
+            new_row = {
+                "Class": class_name,
+                experiment_col: f"{val*100:.2f}"
+            }
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            
+    df.to_csv(csv_path, index=False)
+
 
 if __name__ == "__main__":
     torch.set_float32_matmul_precision('high')

@@ -148,8 +148,12 @@ class MAEModule(L.LightningModule):
                         in band_combinations.items()} if self.bands is not None else {"":[0,1,2]}
 
         for name, bands_idx in band_indices.items():
-            if hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker":
-                saliency = self.model.masker.saliency_extractor(raw_imgs).detach()
+            is_curr_masker = hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker"
+            is_weighted_loss = hasattr(self.model, "loss") and type(self.model.loss).__name__ == "SaliencyWeightedLoss"
+            
+            if is_curr_masker or is_weighted_loss:
+                extractor = self.model.masker.saliency_extractor if is_curr_masker else self.model.loss.saliency_extractor
+                saliency = extractor(raw_imgs).detach()
                 saliency_grid_tensors = []
                 for i in range(num_samples):
                     s_overlay = generate_saliency_grid(saliency[i], image=quant_norm(imgs[i:i+1, bands_idx, :, :])[0].permute(1, 2, 0).cpu().numpy())

@@ -31,14 +31,22 @@ def get_checkpoint_path(experiment, dataset_name, artifacts_dir, wandb_project="
         if not ckpts:
             return None
         
-        best_ckpt, min_loss = None, float('inf')
-        for ckpt in ckpts:
-            loss_str = ckpt.stem.split("=")[-1]
-            loss = float(loss_str)
-            if loss < min_loss:
-                min_loss = loss
-                best_ckpt = ckpt
+        best_ckpt, best_val = None, None
         
+        for ckpt in ckpts:
+            val = float(ckpt.stem.split("=")[-1]) # numerical value after last '='
+
+            is_iou = "val_iou" in ckpt.name
+            if best_val is None:
+                best_val = val
+                best_ckpt = ckpt
+            elif is_iou and val > best_val:
+                best_val = val
+                best_ckpt = ckpt
+            elif not is_iou and val < best_val:
+                best_val = val
+                best_ckpt = ckpt
+                
         return best_ckpt
 
     best_ckpt_path = _find_best(ckpt_dir)

@@ -1,0 +1,20 @@
+Class,Baseline,Feat Guided,Curriculum Ndi
+Urban fabric,69.51,71.63,68.08
+Industrial or commercial units,51.74,58.76,61.06
+Arable land,75.67,76.02,73.52
+Permanent crops,19.56,2.82,24.83
+Pastures,71.24,62.97,67.27
+Complex cultivation patterns,26.26,17.64,27.21
+"Land principally occupied by agriculture, with significant areas of natural vegetation",14.01,11.59,13.46
+Agro-forestry areas,0.00,0.0,0.0
+Broad-leaved forest,57.26,57.89,59.3
+Coniferous forest,67.12,55.18,66.71
+Mixed forest,31.90,38.18,30.71
+Natural grassland and sparsely vegetated areas,21.00,23.19,23.1
+"Moors, heathland and sclerophyllous vegetation",9.95,11.12,7.93
+"Transitional woodland, shrub",16.21,21.18,20.15
+"Beaches, dunes, sands",7.25,21.73,6.92
+Inland wetlands,40.42,26.71,35.16
+Coastal wetlands,31.68,24.86,23.85
+Inland waters,71.29,78.98,75.16
+Marine waters,97.82,98.66,98.31
