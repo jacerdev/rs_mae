@@ -3,7 +3,6 @@ import numpy as np
 from pytorch_toolbelt.inference.tiles import TileMerger
 from pytorch_toolbelt.inference.tiles import compute_pyramid_patch_weight_loss
 import torch
-from tqdm import tqdm
 
 
 @torch.inference_mode()
@@ -38,9 +37,7 @@ def windowed_inference(model, image, window_size, stride, num_classes, batch_siz
     )
     model.eval()
     
-    crops_iter = range(0, len(crops), batch_size)
-    ####if len(crops_iter) > 20: crops_iter = tqdm(crops_iter)
-    for i in crops_iter:
+    for i in range(0, len(crops), batch_size):
         batch_crops = crops[i : i + batch_size]
         batch_tiles = [image[:, y:y+window_size, x:x+window_size] for x, y, _, _ in batch_crops]
         batch_tensor = torch.stack(batch_tiles).to(device)
@@ -51,7 +48,8 @@ def windowed_inference(model, image, window_size, stride, num_classes, batch_siz
 
     return merger.merge()
 
-def windowed_evaluation(preds, masks, input_size, batch_size=1, loss_fn=None, torchmetrics=None):
+def windowed_evaluation(preds, masks, tile_size, loss_fn=None, torchmetrics=None):
+    """tile_size: image size that GPU can handle; tile_size = (model_img_size^2 x batch_size)^(1/2)"""
     if torchmetrics is None: torchmetrics = []
     device = masks.device
     
@@ -60,9 +58,6 @@ def windowed_evaluation(preds, masks, input_size, batch_size=1, loss_fn=None, to
     masks = masks.long().cpu()
     
     _, _, H, W = preds.shape
-
-    # Tile size logic
-    tile_size = int(input_size * batch_size**0.5)
     h, w = (H // (H // tile_size + 1), W // (W // tile_size + 1))
 
     losses = []

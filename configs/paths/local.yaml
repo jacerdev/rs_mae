@@ -8,3 +8,6 @@ c2seg_dir:             "/mnt/ssd/datasets/c2seg/"
 burn_scars_dir:        "/mnt/ssd/datasets/burn_scars/"
 
 wandb_outdir:          "/mnt/ssd/outputs/training_out/"
+
+mock_ckpt_path:        "/mnt/ssd/outputs/training_out/baseline_ep16.ckpt"
+artifacts_dir:         "/mnt/ssd/.FINISHED_RUNS"

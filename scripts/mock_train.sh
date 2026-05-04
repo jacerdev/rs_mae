@@ -26,6 +26,3 @@ python -m train.finetune paths=local batch_size=16 num_workers=4 patch_size=32 m
 echo "--------------------------------------------------"
 echo "🚀 Finetuning 4: c2seg"
 python -m train.finetune paths=local batch_size=16 num_workers=4 patch_size=32 max_epochs=1 precision="16-mixed" img_size=192 segmentation_ds=c2seg dataset.crop_size=192 experiment_name="$experiment" "$@"
-#echo "--------------------------------------------------"
-#echo "🚀 Finetuning 5: burn_scars"
-#python -m train.finetune paths=local batch_size=16 num_workers=4 patch_size=32 max_epochs=1 precision="16-mixed" img_size=192 segmentation_ds=burn_scars experiment_name="$experiment" "$@"

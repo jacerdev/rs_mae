@@ -15,6 +15,7 @@ import wandb
 
 from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset
 from models.segmentation.segmentation_vit import load_pretrained_encoder_weights
+from test.benchmark import run_benchmark
 from train.callbacks import TrainingStateCallback
 from train.lightning_modules import SegmentationDataModule, SegmentationViTModule
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
@@ -35,7 +36,7 @@ def main(cfg: DictConfig):
 
     # Dataset
     train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
-                                 ToTensorV2()])
+                                 ToTensorV2()], seed=cfg.seed)
     val_transform = A.Compose([ToTensorV2()])
 
     match cfg.dataset_name:
@@ -44,7 +45,7 @@ def main(cfg: DictConfig):
             dataset_class_cfg = ReBEN7kDataset_Cfg
             train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
                                          A.PadIfNeeded(min_height=cfg.img_size, min_width=cfg.img_size,
-                                         border_mode=cv2.BORDER_REFLECT), ToTensorV2()])
+                                         border_mode=cv2.BORDER_REFLECT), ToTensorV2()], seed=cfg.seed)
             val_transform = A.Compose([A.PadIfNeeded(min_height=cfg.img_size, min_width=cfg.img_size,
                                        border_mode=cv2.BORDER_REFLECT), ToTensorV2()])
         case "burn_scars":
@@ -63,7 +64,7 @@ def main(cfg: DictConfig):
             dataset_class = C2SegDataset
             dataset_class_cfg = C2SegDataset_Cfg
             train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
-                                         A.RandomCrop(cfg.img_size, cfg.img_size, p=1.0), ToTensorV2()])
+                                         A.RandomCrop(cfg.img_size, cfg.img_size, p=1.0), ToTensorV2()], seed=cfg.seed)
         case _:
             raise ValueError(f"Unknown dataset name: {cfg.dataset_name}")
 
@@ -90,15 +91,10 @@ def main(cfg: DictConfig):
         bands=cfg.dataset.bands, dataset_name=cfg.dataset_name)
 
     # Callbacks
-    if dataset_class == C2SegDataset:
-        monitor, mode, filename = "val_loss", "min", "seg-{epoch:02d}-{val_loss:.4f}"
-    else:
-        monitor, mode, filename = "val_iou", "max", "seg-{epoch:02d}-{val_iou:.4f}"
-    
     lr_monitor = LearningRateMonitor(logging_interval='step')
-    checkpoint_callback = ModelCheckpoint(monitor=monitor, mode=mode, save_last=True, save_top_k=5,
-                                          filename=filename)
-    early_stopping = EarlyStopping(monitor=monitor, mode=mode, patience=cfg.early_stop_patience)
+    checkpoint_callback = ModelCheckpoint(monitor="val_iou", mode="max", save_last=True, save_top_k=3,
+                                          filename="seg-{epoch:02d}-{val_iou:.4f}")
+    early_stopping = EarlyStopping(monitor="val_iou", mode="max", patience=cfg.early_stop_patience)
     callbacks = [checkpoint_callback, lr_monitor, early_stopping, TrainingStateCallback()]
     if Path("/content/drive/My Drive").exists():
         from train.callbacks import CheckpointSyncCallback
@@ -150,6 +146,16 @@ def main(cfg: DictConfig):
         # re-seed before training to ensure deterministic sample order regardless of model initialization
         L.seed_everything(cfg.seed, workers=True)
         trainer.fit(model, datamodule=data_module, ckpt_path=resume_path)
+        
+        # Benchmarking
+        best_ckpt_path = checkpoint_callback.best_model_path
+        results = run_benchmark(cfg, ckpt_path=best_ckpt_path)
+        #wandb.log({f"test/{k}": v for k, v in results.items()})
+
+        table = wandb.Table(columns=["Metric", "Value"])
+        for k, v in results.items(): table.add_data(k, v)
+        wandb.log({"test/results_table": table})
+
         exit_code = 0
     finally:
         wandb.finish(exit_code=exit_code)

@@ -5,7 +5,7 @@ from models.strategies.loss import MaskedMSELoss
 
 
 class UniformityEnhancedMAELoss(ReconstructionLoss):
-    def __init__(self, recon_loss_obj: ReconstructionLoss, lambda_unif=0.01, **kwargs):
+    def __init__(self, lambda_unif=0.01, **kwargs):
         super().__init__(**kwargs)
         self.recon_loss = MaskedMSELoss()
         self.lambda_unif = lambda_unif

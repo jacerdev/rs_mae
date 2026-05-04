@@ -20,7 +20,6 @@ from utils.config import ReBENDataset_Cfg, MaskedAutoencoderViT_Cfg
 @hydra.main(version_base="1.3", config_path="../configs", config_name="pretrain")
 def main(cfg: DictConfig):
     L.seed_everything(cfg.seed, workers=True)
-    is_fast_run = cfg.get("fast_run", False)
     
     # Logger
     wandb_logger = WandbLogger(
@@ -53,7 +52,7 @@ def main(cfg: DictConfig):
 
     # Data
     train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
-                                 A.RandomCrop(cfg.img_size, cfg.img_size, p=1.0), ToTensorV2()])
+                                 A.RandomCrop(cfg.img_size, cfg.img_size, p=1.0), ToTensorV2()], seed=cfg.seed)
     val_transform = A.Compose([A.CenterCrop(cfg.img_size, cfg.img_size), ToTensorV2()])
     
     data_module = ReBENDataModule(
@@ -89,7 +88,7 @@ def main(cfg: DictConfig):
 
     # Trainer
     trainer = L.Trainer(
-        fast_dev_run=is_fast_run,
+        fast_dev_run=cfg.get("fast_run", False),
         max_epochs=cfg.max_epochs,
         accelerator="auto",
         devices="auto",
@@ -116,13 +115,13 @@ def main(cfg: DictConfig):
     # Train
     exit_code = 1
     try:
-        # XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
-        mock_ckpt = cfg.get("mock_ckpt", None)
-        if mock_ckpt:
+        # XXX
+        mock_ckpt_path = cfg.paths.get("mock_ckpt_path", None)
+        if mock_ckpt_path:
             from models.backbones.mae_vit import load_pretrained_mae_weights
-            logging.warning(f"--- TEMPORARY: Loading mock weights from {mock_ckpt} ---")
-            load_pretrained_mae_weights(model.model, mock_ckpt, cfg.bands)
-        # XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+            logging.warning(f"=== LOADING MOCK weights from {mock_ckpt_path} ===")
+            load_pretrained_mae_weights(model.model, mock_ckpt_path, cfg.bands)
+        # XXX
 
         # re-seed before training to ensure deterministic sample order regardless of model initialization
         L.seed_everything(cfg.seed, workers=True)

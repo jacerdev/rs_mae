@@ -163,8 +163,8 @@ class MaskedAutoencoderViT(nn.Module):
         latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, raw_imgs=raw_imgs, **kwargs)
         pred = self.forward_decoder(latent, ids_restore)
         
-        loss, extra_losses = self.forward_loss(imgs, pred, mask, latent=latent, raw_imgs=raw_imgs)
-        return loss, pred, mask, extra_losses
+        loss, individual_losses = self.forward_loss(imgs, pred, mask, latent=latent, raw_imgs=raw_imgs)
+        return loss, pred, mask, individual_losses
 
 
 def load_pretrained_mae_weights(model, ckpt_path, bands):

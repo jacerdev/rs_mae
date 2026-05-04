@@ -64,7 +64,7 @@ def compare():
     # Custom Forward
     torch.manual_seed(seed)
     with torch.no_grad():
-        custom_loss, custom_pred, custom_mask, custom_extra_losses = custom_model(x, mask_ratio=0.7)
+        custom_loss, custom_pred, custom_mask, custom_individual_losses = custom_model(x, mask_ratio=0.7)
         # custom_pred has both concatenated
         hog_out_dim = custom_model.target._hog_feats
         custom_hog_pred = custom_pred[..., :hog_out_dim]

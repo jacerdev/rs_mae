@@ -141,7 +141,7 @@ class ReBENDataset(Dataset):
         # load all tensor keys present in the LMDB
         self.env = None
         keys_path = Path(keys_path) if keys_path is not None else None
-        if keys_path is not None and keys_path.exists() and keys_path.stat().st_mtime >= Path(data_dir).stat().st_mtime:
+        if keys_path is not None and keys_path.exists() and keys_path.stat().st_mtime >= (Path(data_dir) / "data.mdb").stat().st_mtime:
             with keys_path.open("rb") as f:
                 available_keys = set(pickle.load(f))
             logging.info(f"Cached {len(available_keys)} keys from {keys_path}")

@@ -18,18 +18,14 @@ from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2Se
 from models.segmentation.segmentation_vit import SegmentationViT
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
 from utils.spatial_ops import windowed_inference, windowed_evaluation
-from utils.utils import get_checkpoint_path
+from utils.utils import get_checkpoints_dir, find_best_ckpt
 from utils.visualization import plot_images, prepare_segmentation_visuals
 
-SAVE_PREDS = False
 PLOT_RESULTS = False
-
-batch_size = 16
-num_workers = 2
-prefetch_factor = 2
-artifacts_dir = "/mnt/ssd/.FINISHED_RUNS"
+SAVE_DIR = "results/"
 
 class EvaluationDataset(torch.utils.data.Dataset):
+    """Wrapper to add ids to dataset items."""
     def __init__(self, ds):
         self.ds = ds
     def __len__(self):
@@ -39,9 +35,24 @@ class EvaluationDataset(torch.utils.data.Dataset):
         return self.ds.ids[idx], img, mask
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="finetune")
-def main(cfg: DictConfig):
-    # Dataset
+def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
+    if ckpt_path is None: # Local run
+        batch_size = 16
+        num_workers = 2
+        prefetch_factor = 2
+
+        ckpt_dir = get_checkpoints_dir(cfg.experiment_name, cfg.dataset_name, cfg.paths.artifacts_dir, wandb_project=cfg.wandb.project)
+        ckpt_path = find_best_ckpt(ckpt_dir)
+        if not ckpt_path:
+            raise FileNotFoundError(f"Could not find checkpoint in {ckpt_dir}")
+    else: # Cluster run
+        batch_size = 64
+        num_workers = cfg.num_workers
+        prefetch_factor = cfg.prefetch_factor
+
+    logging.info(f"Loading checkpoint from {ckpt_path}")
+
+    # Data
     test_transform = A.Compose([ToTensorV2()])
 
     match cfg.dataset_name:
@@ -50,98 +61,82 @@ def main(cfg: DictConfig):
             dataset_class_cfg = ReBEN7kDataset_Cfg
             test_transform = A.Compose([A.PadIfNeeded(min_height=cfg.img_size, min_width=cfg.img_size,
                                          border_mode=cv2.BORDER_REFLECT), ToTensorV2()])
+            splits_to_eval = ["test", "ood"]
         case "burn_scars":
             dataset_class = BurnScarsDataset
             dataset_class_cfg = BurnScarsDataset_Cfg
-
+            splits_to_eval = ["test"]
         case "sen1floods11":
             dataset_class = Sen1Floods11Dataset
             dataset_class_cfg = Sen1Floods11Dataset_Cfg
-
+            splits_to_eval = ["test", "bolivia"]
         case "cashew_plantation":
             dataset_class = CashewPlantationDataset
             dataset_class_cfg = CashewPlantationDataset_Cfg
-
+            splits_to_eval = ["test"]
         case name if name.startswith("c2seg"):
             dataset_class = C2SegDataset
             dataset_class_cfg = C2SegDataset_Cfg
-
+            if cfg.dataset_name == "c2seg_beijing": cfg.dataset_name, cfg.dataset.city = "c2seg_wuhan", "wuhan"
+            elif cfg.dataset_name == "c2seg_augsburg": cfg.dataset_name, cfg.dataset.city = "c2seg_berlin", "berlin"
+            splits_to_eval = ["test"]
         case _:
             raise ValueError(f"Unknown dataset name extracted from wandb.run_name: {cfg.dataset_name}")
 
-    # Data
     dataset_cfg = dataset_class_cfg(**cfg.dataset)
-    ood_split = cfg.get("ood_split", None)
-    test_ds = dataset_class(**{**asdict(dataset_cfg), "grid_sampling": False},
-                            split=ood_split if ood_split else "test", transform=test_transform)
-    logging.info(f"Test set size: [{len(test_ds)}, {tuple(test_ds[0][0].shape)}]")
-
-    eval_ds = EvaluationDataset(test_ds)
-    test_loader = DataLoader(
-        eval_ds,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        prefetch_factor=prefetch_factor,
-        persistent_workers=num_workers > 0,
-        pin_memory=True)
-
-    # Cache Check
-    cache_dir = Path(artifacts_dir) / "results" / cfg.experiment_name / (cfg.dataset_name + ("_" + ood_split if ood_split else ""))
-    use_cache = cache_dir.exists() and any(p.suffix == ".pt" for p in cache_dir.iterdir())
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if use_cache:
-        logging.info(f"Using cached results from {cache_dir}. Delete them to re-run inference.")
-        model = None
-    else:
-        # Model
-        model_cfg = SegmentationViT_Cfg(
-            **{**dict(cfg.model), "norm_layer": instantiate(cfg.model.norm_layer)}
-        )
-        model = SegmentationViT(**asdict(model_cfg))
+    # Model
+    model_cfg = SegmentationViT_Cfg(
+        **{**dict(cfg.model), "norm_layer": instantiate(cfg.model.norm_layer)}
+    )
+    model = SegmentationViT(**asdict(model_cfg))
 
-        # Checkpoint
-        ckpt_path = get_checkpoint_path(cfg.experiment_name, cfg.dataset_name, artifacts_dir, wandb_project=cfg.wandb.project)
-        try:
-            state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-            state_dict = state.get("state_dict", state)
-            state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
-            model.load_state_dict(state_dict)
-            logging.info(f"Loaded checkpoint from {ckpt_path}")
-        except Exception as e:
-            logging.error(f"Failed to load checkpoint from {ckpt_path}: {e}")
+    # Load checkpoint
+    try:
+        state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        state_dict = state.get("state_dict", state)
+        state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
+        model.load_state_dict(state_dict)
+        logging.info(f"Loaded checkpoint from {ckpt_path}")
+    except Exception as e:
+        logging.error(f"Failed to load checkpoint from {ckpt_path}: {e}")
 
-        model = model.to(device).eval()
+    model = model.to(device).eval()
 
-    # Metrics
-    loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
-    acc  = MulticlassAccuracy(num_classes=cfg.num_classes, ignore_index=-1, average='micro').to(device)
-    iou  = JaccardIndex(task="multiclass", num_classes=cfg.num_classes, ignore_index=-1, average='macro').to(device)
-    f1   = F1Score(task="multiclass", num_classes=cfg.num_classes, ignore_index=-1, average='none').to(device)
+    all_results = {}
 
-    # Inference
-    total_loss = 0.0
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    for split_name in splits_to_eval:
+        logging.info(f"=== Benchmarking split: {split_name} ===")
+        
+        # Dataloader
+        test_ds = dataset_class(**{**asdict(dataset_cfg), "grid_sampling": False},
+                                split=split_name, transform=test_transform)
+        logging.info(f"Test set size: [{len(test_ds)}, {tuple(test_ds[0][0].shape)}]")
 
-    with torch.no_grad():
-        for batch_idx, (sample_ids, imgs, masks) in tqdm(enumerate(test_loader)):
-            imgs  = imgs.to(device)
-            masks = masks.long().to(device)
-            _, _, H, W = imgs.shape
+        eval_ds = EvaluationDataset(test_ds)
+        test_loader = DataLoader(
+            eval_ds, batch_size=batch_size, shuffle=False,
+            num_workers=num_workers, prefetch_factor=prefetch_factor,
+            persistent_workers=num_workers > 0, pin_memory=True)
 
-            input_size = cfg.img_size
+        # Metrics
+        loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
+        acc  = MulticlassAccuracy(num_classes=cfg.num_classes, ignore_index=-1, average='micro').to(device)
+        iou  = JaccardIndex(task="multiclass", num_classes=cfg.num_classes, ignore_index=-1, average='macro').to(device)
+        f1   = F1Score(task="multiclass", num_classes=cfg.num_classes, ignore_index=-1, average='none').to(device)
 
-            if use_cache:
-                batch_preds = []
-                for i in range(len(imgs)):
-                    sample_id = sample_ids[i]
-                    cache_path = cache_dir / f"{sample_id}.pt"
-                    pred = torch.load(cache_path, map_location='cpu', weights_only=False)
-                    batch_preds.append(pred)
-                preds = torch.cat(batch_preds, dim=0) # (B, C, H, W) on CPU
-            else:
+        total_loss = 0.0
+
+        with torch.no_grad():
+            for batch_idx, (sample_ids, imgs, masks) in tqdm(enumerate(test_loader), total=len(test_loader)):
+                imgs  = imgs.to(device)
+                masks = masks.long().to(device)
+                _, _, H, W = imgs.shape
+                input_size = cfg.img_size
+
+                # Inference
                 if H <= input_size and W <= input_size:
                     preds = model(imgs) # (B, C, H, W) on device
                 else:
@@ -155,62 +150,61 @@ def main(cfg: DictConfig):
                                                 merger_device='cpu')
                         preds_list.append(pred)
                     preds = torch.stack(preds_list, dim=0) # (B, C, H, W) on CPU
-                # Save each result
-                if SAVE_PREDS:
-                    #logging.info(f"Saving outputs..")
-                    for i in range(len(imgs)):
-                        sample_id = sample_ids[i]
-                        torch.save(preds[i:i+1].cpu().clone(), cache_dir / f"{sample_id}.pt")
 
-            # Evaluation
-            if H <= input_size and W <= input_size:
-                preds = preds.to(device)
-                batch_loss = loss_fn(preds, masks).item() if loss_fn else 0.0
-                for torchmetric in [acc, iou, f1]:
-                    torchmetric.update(preds, masks)
-            else:
-                batch_loss_tensor = windowed_evaluation(preds=preds, # on CPU
-                                                        masks=masks,
-                                                        input_size=input_size,
-                                                        batch_size=batch_size,
-                                                        loss_fn=loss_fn,
-                                                        torchmetrics=[acc, iou, f1])
-                batch_loss = batch_loss_tensor.item() if batch_loss_tensor is not None else 0.0
+                # Evaluation
+                if H <= input_size and W <= input_size:
+                    preds = preds.to(device)
+                    batch_loss = loss_fn(preds, masks).item() if loss_fn else 0.0
+                    for torchmetric in [acc, iou, f1]:
+                        torchmetric.update(preds, masks)
+                else:
+                    batch_loss_tensor = windowed_evaluation(preds=preds, # on CPU
+                                                            masks=masks,
+                                                            tile_size=int(input_size * batch_size**0.5),
+                                                            loss_fn=loss_fn,
+                                                            torchmetrics=[acc, iou, f1])
+                    batch_loss = batch_loss_tensor.item() if batch_loss_tensor is not None else 0.0
 
-            total_loss += batch_loss
+                total_loss += batch_loss
 
-            if PLOT_RESULTS:
-                imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(imgs.detach().cpu(), masks.detach().cpu(), preds.detach().cpu(),
-                                                            bands=dataset_cfg.bands, dataset_name=cfg.dataset_name)
-                plot_images(torch.stack([imgs_vis, gt_vis, pred_vis], dim=1).flatten(0,1), ncols=3)
+                if PLOT_RESULTS:
+                    imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(imgs.detach().cpu(), masks.detach().cpu(), preds.detach().cpu(),
+                                                                bands=dataset_cfg.bands, dataset_name=cfg.dataset_name)
+                    plot_images(torch.stack([imgs_vis, gt_vis, pred_vis], dim=1).flatten(0,1), ncols=3)
+                
+        f1_per_class = f1.compute()
 
-    f1_per_class = f1.compute()
+        results = {f"loss": total_loss / len(test_loader),
+                   f"OA": acc.compute().item(),
+                   f"mIoU": iou.compute().item(),
+                   f"mF1": f1_per_class.nanmean().item()}
 
-    results = {f"loss": total_loss / len(test_loader),
-               f"OA": acc.compute().item(),
-               f"mIoU": iou.compute().item(),
-               f"mF1": f1_per_class.nanmean().item()}
-    
-    log_results(results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split, csv_path="results/benchmark_results.csv")
-    
-    per_class_results = {}
-    for idx, f1_val in enumerate(f1_per_class):
-        class_name = dataset_class.CLASSES.get(idx, f"Class {idx}")
-        per_class_results[class_name] = f1_val.item()
+        ood_split = split_name if split_name != "test" else ""
+        _dataset_name = (cfg.dataset_name + ("_" + ood_split)).replace("_", " ").title().strip()
+        log_results(results, _dataset_name, cfg.experiment_name, csv_path=f"{SAVE_DIR}/benchmark_results.csv")
 
-    log_per_class_results(per_class_results, cfg.dataset_name, cfg.experiment_name, ood_split=ood_split)
-    
-    for k, v in results.items():
-        print(f"{k}: {v:.4f}")
+        # per class results
+        per_class_results = {}
+        for idx, f1_val in enumerate(f1_per_class):
+            class_name = dataset_class.CLASSES.get(idx, f"Class {idx}")
+            per_class_results[class_name] = f1_val.item()
 
-    return results
+        suffix = f"_{ood_split}" if ood_split else ""
+        log_per_class_results(per_class_results, cfg.experiment_name, csv_path=f"{SAVE_DIR}/{cfg.dataset_name}{suffix}.csv")
+
+        for class_name, val in per_class_results.items():
+            results[f"F1 - {class_name}"] = val
+
+        # all results
+        prefix = f"{ood_split}_" if ood_split else ""
+        for k, v in results.items():
+            all_results[f"{prefix}{k}"] = v
+
+    return all_results
 
 
-def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path="results.csv"):
+def log_results(results, dataset_name, experiment_name, csv_path="results.csv"):
     """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
-    dataset_name = (dataset_name + ("_" + ood_split if ood_split else "")) \
-        .replace("_", " ").title().strip()
-
     experiment_col = experiment_name.replace("_", " ").title().strip()
 
     csv_path = Path(csv_path)
@@ -260,30 +254,30 @@ def log_results(results, dataset_name, experiment_name, ood_split=None, csv_path
     df_out["Dataset"] = df_out["Dataset"].where(
         df_out["Dataset"] != df_out["Dataset"].shift(), "")
 
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
     df_out.to_csv(csv_path, index=False, float_format="%.2f")
 
-def log_per_class_results(results, dataset_name, experiment_name, ood_split=None):
+def log_per_class_results(results, experiment_name, csv_path="benchmark_per_class_results.csv"):
     """results: dict mapping class names to F1 values"""
-    experiment_col = experiment_name.replace("_", " ").title().strip()
-    
-    csv_name = "results/" + dataset_name + ("_" + ood_split if ood_split else "") + ".csv"
-    csv_path = Path(csv_name)
-    
+    csv_path = Path(csv_path)
+
     if csv_path.exists():
         df = pd.read_csv(csv_path, dtype=str)
     else:
         df = pd.DataFrame(columns=["Class"])
-        
+
     df = df.astype(object)
     df["Class"] = df["Class"].astype(str).str.strip()
-    
+
+    experiment_col = experiment_name.replace("_", " ").title().strip()
+
     if experiment_col not in df.columns:
         df[experiment_col] = None
-        
+
     for class_name, val in results.items():
         class_name = str(class_name).strip()
         mask = df["Class"] == class_name
-        
+
         if mask.any():
             df.loc[mask, experiment_col] = f"{val*100:.2f}"
         else:
@@ -292,9 +286,17 @@ def log_per_class_results(results, dataset_name, experiment_name, ood_split=None
                 experiment_col: f"{val*100:.2f}"
             }
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-            
+
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(csv_path, index=False, float_format="%.2f")
 
+
+@hydra.main(version_base="1.3", config_path="../configs", config_name="finetune")
+def main(cfg: DictConfig):
+    all_results = run_benchmark(cfg)
+
+    from pprint import pprint
+    pprint(all_results)
 
 if __name__ == "__main__":
     torch.set_float32_matmul_precision('high')

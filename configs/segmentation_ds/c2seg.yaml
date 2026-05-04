@@ -14,8 +14,7 @@ dataset:
   normalize: false
 
   grid_sampling: true
-  crop_size: 234 # must be <= img_size
-  min_margin: null # ==> margin = (13474-234*57, 8706*.85 -31*234 = 7400-31*234) = (136, 146)
+  crop_size: 234 # ==> grid shift margin = (13474 - 234*57, 8706*0.85 - 31*234) = (136, 146)
 
 dataset_name: "c2seg_${dataset.city}"
   

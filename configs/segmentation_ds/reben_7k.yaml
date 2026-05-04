@@ -16,7 +16,6 @@ dataset:
 
   grid_sampling: false
   crop_size: null
-  min_margin: null
 
 dataset_name: "reben_7k"
 

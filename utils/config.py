@@ -23,7 +23,6 @@ class ReBENDataset_Cfg:
 class SegmentationDataset_Cfg:
     grid_sampling: bool
     crop_size: int
-    min_margin: int
 
 @dataclass
 class ReBEN7kDataset_Cfg(SegmentationDataset_Cfg):

@@ -14,7 +14,6 @@ dataset:
   normalize: false
 
   grid_sampling: true
-  crop_size: ${img_size}
-  min_margin: null # ==> margin = 64
+  crop_size: ${img_size} # ==> grid shift margin = 64
 
 dataset_name: "burn_scars"

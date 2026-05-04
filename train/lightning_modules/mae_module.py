@@ -41,16 +41,15 @@ class MAEModule(L.LightningModule):
         return self.model(x, mask_ratio=self.mask_ratio)
 
     def training_step(self, batch, batch_idx):
-        loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio)
+        loss, pred, mask, individual_losses = self.model(batch, mask_ratio=self.mask_ratio)
         
-        if isinstance(self.model.target, HOGNDITarget):
-            self.log("train_hog_loss", extra_losses[0], on_step=True, on_epoch=True, sync_dist=True)
-            self.log("train_ndi_loss", extra_losses[1], on_step=True, on_epoch=True, sync_dist=True)
-        elif isinstance(self.model.loss, FFTEnhancedLoss):
-            self.log("train_mse_loss", extra_losses[0], on_step=True, on_epoch=True, sync_dist=True)
-            self.log("train_amp_loss", extra_losses[1], on_step=True, on_epoch=True, sync_dist=True)
-            self.log("train_phase_loss", extra_losses[2], on_step=True, on_epoch=True, sync_dist=True)
+        # log individual losses
+        if isinstance(self.model.target, HOGNDITarget): keys = ["train_hog_loss", "train_ndi_loss"]
+        elif isinstance(self.model.loss, FFTEnhancedLoss): keys = ["train_mse_loss", "train_amp_loss", "train_phase_loss"]
+        else: keys = []
+        for k, v in zip(keys, individual_losses): self.log(k, v, on_step=True, on_epoch=True, sync_dist=True)
 
+        # log main loss
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
         
         if batch_idx == 0:
@@ -58,16 +57,15 @@ class MAEModule(L.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio, phase="val")
+        loss, pred, mask, individual_losses = self.model(batch, mask_ratio=self.mask_ratio, phase="val")
         
-        if isinstance(self.model.target, HOGNDITarget):
-            self.log("val_hog_loss", extra_losses[0], on_epoch=True, sync_dist=True)
-            self.log("val_ndi_loss", extra_losses[1], on_epoch=True, sync_dist=True)
-        elif isinstance(self.model.loss, FFTEnhancedLoss):
-            self.log("val_mse_loss", extra_losses[0], on_epoch=True, sync_dist=True)
-            self.log("val_amp_loss", extra_losses[1], on_epoch=True, sync_dist=True)
-            self.log("val_phase_loss", extra_losses[2], on_epoch=True, sync_dist=True)
+        # log individual losses
+        if isinstance(self.model.target, HOGNDITarget): keys = ["val_hog_loss", "val_ndi_loss"]
+        elif isinstance(self.model.loss, FFTEnhancedLoss): keys = ["val_mse_loss", "val_amp_loss", "val_phase_loss"]
+        else: keys = []
+        for k, v in zip(keys, individual_losses): self.log(k, v, on_epoch=True, sync_dist=True)
 
+        # log main loss
         self.log("val_loss", loss, on_epoch=True, prog_bar=True, sync_dist=True)
         
         if batch_idx == 0:
@@ -143,16 +141,16 @@ class MAEModule(L.LightningModule):
             recon_restored = imgs * (1 - mask_expanded) + recon_restored * mask_expanded
 
         # log
-        band_combinations = {"true_color": ["B04", "B03", "B02"], "red_edge": ["B07", "B06", "B05"], "vegetation": ["B08", "B04", "B03"], "moisture_composite": ["B8A", "B11", "B12"]}
+        band_combinations = {"RGB": ["B04", "B03", "B02"], "NIR": ["B07", "B06", "B05"], "SWIR": ["B11"]*3}
         band_indices = {name: [self.bands.index(b) for b in bands] for name, bands
                         in band_combinations.items()} if self.bands is not None else {"":[0,1,2]}
 
         for name, bands_idx in band_indices.items():
-            is_curr_masker = hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker"
+            is_curriculum_masker = hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker"
             is_weighted_loss = hasattr(self.model, "loss") and type(self.model.loss).__name__ == "SaliencyWeightedLoss"
             
-            if is_curr_masker or is_weighted_loss:
-                extractor = self.model.masker.saliency_extractor if is_curr_masker else self.model.loss.saliency_extractor
+            if is_curriculum_masker or is_weighted_loss:
+                extractor = self.model.masker.saliency_extractor if is_curriculum_masker else self.model.loss.saliency_extractor
                 saliency = extractor(raw_imgs).detach()
                 saliency_grid_tensors = []
                 for i in range(num_samples):
@@ -172,7 +170,7 @@ class MAEModule(L.LightningModule):
             combined = torch.cat(rows, dim=0)
             
             grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
-            tag = f"reconstructions_{name} / {split} (mask_ratio={mask.float().mean().item():.2f})"
+            tag = f"reconstructions_{name} / {split}"
             self.logger.log_image(key=tag, images=[grid], step=self.global_step)
 
     def _log_hog_ndi_reconstructions(self, outputs, split):
@@ -226,7 +224,7 @@ class MAEModule(L.LightningModule):
                             quant_norm(ndi_target + 1),
                             quant_norm(ndi_recon)], dim=0)
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
-        tag = f"reconstructions_ndi / {split} (mask_ratio={mask.float().mean().item():.2f})"
+        tag = f"reconstructions_ndi / {split}"
         self.logger.log_image(key=tag, images=[grid], step=self.global_step)
         
         # HOG
@@ -249,5 +247,5 @@ class MAEModule(L.LightningModule):
                             hog_recon.repeat(1, 3, 1, 1),
                             hog_recon_overlayed], dim=0)
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
-        tag = f"reconstructions_hog / {split} (mask_ratio={mask.float().mean().item():.2f})"
+        tag = f"reconstructions_hog / {split}"
         self.logger.log_image(key=tag, images=[grid], step=self.global_step)

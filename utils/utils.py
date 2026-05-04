@@ -8,7 +8,7 @@ import sys
 
 ### hardcoded stuff ###
 
-def get_checkpoint_path(experiment, dataset_name, artifacts_dir, wandb_project="RS_MAE-Thesis"):
+def get_checkpoints_dir(experiment, dataset_name, artifacts_dir, wandb_project="RS_MAE-Thesis"):
     workspace_root = Path(__file__).parents[1]
     runs_json_path = workspace_root / "runs.json"
     
@@ -22,36 +22,8 @@ def get_checkpoint_path(experiment, dataset_name, artifacts_dir, wandb_project="
         raise ValueError(f"Run ID not found for experiment='{experiment}', dataset_name='{dataset_name}' in {runs_json_path}")
     
     ckpt_dir = Path(artifacts_dir) / wandb_project / run_id / "checkpoints"
-    
-    def _find_best(directory):
-        if not directory.exists():
-            return None
-        
-        ckpts = list(directory.glob("seg-*.ckpt")) + list(directory.glob("mae-*.ckpt"))
-        if not ckpts:
-            return None
-        
-        best_ckpt, best_val = None, None
-        
-        for ckpt in ckpts:
-            val = float(ckpt.stem.split("=")[-1]) # numerical value after last '='
-
-            is_iou = "val_iou" in ckpt.name
-            if best_val is None:
-                best_val = val
-                best_ckpt = ckpt
-            elif is_iou and val > best_val:
-                best_val = val
-                best_ckpt = ckpt
-            elif not is_iou and val < best_val:
-                best_val = val
-                best_ckpt = ckpt
-                
-        return best_ckpt
-
-    best_ckpt_path = _find_best(ckpt_dir)
-    
-    if not best_ckpt_path:
+   
+    if not any(ckpt_dir.glob("seg-*.ckpt")):
         logging.info(f"Checkpoint not found in {ckpt_dir}. Attempting to rsync from cluster...")
         
         remote_path = f"jacer@gateway.hpc.tu-berlin.de:/scratch/jacer/outputs/training_out/{wandb_project}/{run_id}"
@@ -65,14 +37,40 @@ def get_checkpoint_path(experiment, dataset_name, artifacts_dir, wandb_project="
             subprocess.run(f'rsync -avP --exclude last.ckpt {remote_path} {str(local_dest)}', 
                            shell=True, executable="/bin/bash", check=True, env=env)
             logging.info("rsync completed successfully.")
-            best_ckpt_path = _find_best(ckpt_dir)
+
+            if not any(ckpt_dir.glob("seg-*.ckpt")):
+                raise FileNotFoundError(f"Could not find any valid checkpoints in {ckpt_dir} after rsync.")
+            
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Could not retrieve checkpoints from cluster for run_id {run_id}. Error: {e}")
-
-    if not best_ckpt_path:
-        raise FileNotFoundError(f"Could not find any valid checkpoints in {ckpt_dir} after rsync attempt.")
         
-    return str(best_ckpt_path)
+    return ckpt_dir
+
+def find_best_ckpt(directory):
+    if not directory.exists():
+        return None
+    
+    ckpts = list(directory.glob("seg-*.ckpt")) + list(directory.glob("mae-*.ckpt"))
+    if not ckpts:
+        return None
+    
+    best_ckpt, best_val = None, None
+    
+    for ckpt in ckpts:
+        val = float(ckpt.stem.split("=")[-1]) # numerical value after last '='
+
+        is_iou = "val_iou" in ckpt.name
+        if best_val is None:
+            best_val = val
+            best_ckpt = ckpt
+        elif is_iou and val > best_val:
+            best_val = val
+            best_ckpt = ckpt
+        elif not is_iou and val < best_val:
+            best_val = val
+            best_ckpt = ckpt
+            
+    return best_ckpt
 
 def setup_logging(level="info"):
     class ColorFormatter(logging.Formatter):
