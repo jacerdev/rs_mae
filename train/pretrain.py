@@ -15,6 +15,7 @@ import wandb
 from train.callbacks import TrainingStateCallback
 from train.lightning_modules import ReBENDataModule, MAEModule
 from utils.config import ReBENDataset_Cfg, MaskedAutoencoderViT_Cfg
+from utils.utils import log_run_to_json
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="pretrain")
@@ -28,6 +29,14 @@ def main(cfg: DictConfig):
         save_dir=cfg.wandb.outdir,
         id=cfg.wandb.run_id,
         resume="allow" if cfg.wandb.run_id else None)
+    
+    log_run_to_json(
+        experiment_name=cfg.experiment_name,
+        seed=cfg.seed,
+        dataset_name="reben",
+        run_name=cfg.wandb.run_name, # or wandb_logger.experiment.name
+        run_id=wandb_logger.experiment.id
+    )
 
     # Experiment
     masker_kwargs, target_kwargs, loss_kwargs = {}, {}, {}
@@ -43,6 +52,8 @@ def main(cfg: DictConfig):
             pass
         case "hog_weighted":
             loss_kwargs = {"saliency_extractor": instantiate(cfg.saliency_extractor)}
+        case "latent_target":
+            target_kwargs = {"embed_dim": cfg.model.embed_dim}
         case _:
             raise ValueError("Experiment not recognized.")
 

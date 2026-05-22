@@ -65,12 +65,13 @@ for ((i=0; i<${#experiments[@]}; i+=2)); do
     python -m train.pretrain experiment="$exp1" $overrides &
     pid1=$!
 
+    pid2=""
     if [ -n "$exp2" ]; then # run 2nd experiment in parallel if exists
         python -m train.pretrain experiment="$exp2" $overrides &
         pid2=$!
     fi
 
-    wait $pid1 ${pid2:-}
+    wait $pid1 ${pid2:+$pid2}
 done
 
 
@@ -90,13 +91,14 @@ for experiment in "${experiments[@]}"; do
             experiment_name="$experiment" segmentation_ds="$ds1" $overrides &
         pid1=$!
 
+        pid2=""
         if [ ! -z "$ds2" ]; then # run 2nd dataset in parallel if exists
             python -m train.finetune \
                 experiment_name="$experiment" segmentation_ds="$ds2" $overrides &
             pid2=$!
         fi
 
-        wait $pid1 ${pid2:-}
+        wait $pid1 ${pid2:+$pid2}
     done
 done
 

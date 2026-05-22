@@ -10,6 +10,6 @@ class ReconstructionLoss:
             mask: Tensor (B, N), 1 = masked, 0 = visible
             **kwargs: Extra context (e.g., latent features) for specialized losses
         Returns:
-            scalar total loss, individual losses for logging
+            scalar total loss, dict of individual losses for logging
         """
         raise NotImplementedError

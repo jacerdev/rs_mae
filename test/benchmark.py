@@ -6,8 +6,6 @@ import hydra
 from hydra.utils import instantiate
 import logging
 from omegaconf import DictConfig
-import pandas as pd
-from pathlib import Path
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -18,7 +16,7 @@ from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2Se
 from models.segmentation.segmentation_vit import SegmentationViT
 from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
 from utils.spatial_ops import windowed_inference, windowed_evaluation
-from utils.utils import get_checkpoints_dir, find_best_ckpt
+from utils.utils import get_checkpoints_dir, find_best_ckpt, log_per_class_results, log_results
 from utils.visualization import plot_images, prepare_segmentation_visuals
 
 PLOT_RESULTS = False
@@ -201,94 +199,6 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
             all_results[f"{prefix}{k}"] = v
 
     return all_results
-
-
-def log_results(results, dataset_name, experiment_name, csv_path="results.csv"):
-    """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
-    experiment_col = experiment_name.replace("_", " ").title().strip()
-
-    csv_path = Path(csv_path)
-
-    # load or initialize
-    if csv_path.exists():
-        df = pd.read_csv(csv_path, dtype=str)
-    else:
-        df = pd.DataFrame(columns=["Dataset", "Metric"])
-
-    # normalize
-    df = df.astype(object)
-    df["Dataset"] = df["Dataset"].astype(str).str.strip().replace(r"^\s*$", pd.NA, regex=True).ffill()
-    df["Metric"] = df["Metric"].astype(str).str.strip()
-
-    # ensure column exists
-    if experiment_col not in df.columns:
-        df[experiment_col] = None
-
-    # insert / update
-    for metric_name, val in results.items():
-        if metric_name == "loss":
-            continue
-
-        metric_name = metric_name.strip()
-
-        mask = (df["Dataset"] == dataset_name) & (df["Metric"] == metric_name)
-
-        if mask.any():
-            df.loc[mask, experiment_col] = f"{val*100:.2f}"
-        else:
-            new_row = {
-                "Dataset": dataset_name,
-                "Metric": metric_name,
-                experiment_col: f"{val*100:.2f}"
-            }
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
-    # keep table structured
-    metric_order = ["OA", "mIoU", "mF1"]
-    df["Metric"] = pd.Categorical(df["Metric"], categories=metric_order, ordered=True)
-
-    df = df.sort_values(by=["Dataset", "Metric"]).reset_index(drop=True)
-
-    # blank repeated dataset names
-    df_out = df.copy()
-    df_out["Dataset"] = df_out["Dataset"].where(
-        df_out["Dataset"] != df_out["Dataset"].shift(), "")
-
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    df_out.to_csv(csv_path, index=False, float_format="%.2f")
-
-def log_per_class_results(results, experiment_name, csv_path="benchmark_per_class_results.csv"):
-    """results: dict mapping class names to F1 values"""
-    csv_path = Path(csv_path)
-
-    if csv_path.exists():
-        df = pd.read_csv(csv_path, dtype=str)
-    else:
-        df = pd.DataFrame(columns=["Class"])
-
-    df = df.astype(object)
-    df["Class"] = df["Class"].astype(str).str.strip()
-
-    experiment_col = experiment_name.replace("_", " ").title().strip()
-
-    if experiment_col not in df.columns:
-        df[experiment_col] = None
-
-    for class_name, val in results.items():
-        class_name = str(class_name).strip()
-        mask = df["Class"] == class_name
-
-        if mask.any():
-            df.loc[mask, experiment_col] = f"{val*100:.2f}"
-        else:
-            new_row = {
-                "Class": class_name,
-                experiment_col: f"{val*100:.2f}"
-            }
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(csv_path, index=False, float_format="%.2f")
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="finetune")

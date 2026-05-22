@@ -16,12 +16,16 @@ class SaliencyWeightedLoss(nn.Module, ReconstructionLoss):
         self.saliency_scale = saliency_scale
         
 
-    def __call__(self, pred, target, mask, **kwargs):
-        B, N, dim = pred.shape
+    def __call__(self, pred, target, mask, phase="", **kwargs):
+        if phase == "validation":
+            total_loss = ((pred - target).pow(2).mean(dim=-1) * mask).sum() / mask.sum().clamp(min=1)
+            return total_loss, {"not_weighted_mse": total_loss.detach()}
 
         if "raw_imgs" not in kwargs:
             raise ValueError("raw_imgs must be provided for SaliencyWeightedLoss")
         raw_imgs = kwargs["raw_imgs"]
+
+        B, N, dim = pred.shape
         
         # extract saliency and normalize
         with torch.no_grad():
@@ -46,4 +50,4 @@ class SaliencyWeightedLoss(nn.Module, ReconstructionLoss):
         # Average over masked patches
         total_loss = weighted_mse.sum() / mask.sum().clamp(min=1)
 
-        return total_loss, (total_loss,)
+        return total_loss, {"weighted_mse": total_loss.detach()}

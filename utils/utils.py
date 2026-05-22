@@ -1,7 +1,8 @@
+import fcntl
 import json
-import lightning as L
 import logging
 import os
+import pandas as pd
 from pathlib import Path
 import subprocess
 import sys
@@ -71,6 +72,151 @@ def find_best_ckpt(directory):
             best_ckpt = ckpt
             
     return best_ckpt
+
+def log_run_to_json(experiment_name, seed, dataset_name, run_name, run_id):
+    workspace_root = Path(__file__).parents[1]
+    runs_json_path = workspace_root / "runs.json"
+    
+    with open(runs_json_path, 'a+') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            content = f.read()
+            runs_data = {}
+            if content:
+                try:
+                    runs_data = json.loads(content)
+                except json.JSONDecodeError:
+                    pass
+                    
+            exp_key = f"{experiment_name}-{seed}"
+            if exp_key not in runs_data:
+                runs_data[exp_key] = {}
+                
+            if dataset_name in runs_data[exp_key]:
+                existing_run_name = runs_data[exp_key][dataset_name].get("run_name")
+                existing_run_id = runs_data[exp_key][dataset_name].get("run_id")
+                if existing_run_id != run_id:
+                    logging.error(f"Run for experiment {exp_key} and dataset {dataset_name} already exists in runs.json (run_name={existing_run_name}, run_id={existing_run_id}). Overwriting with run_name={run_name}, run_id={run_id}.")
+                    
+            runs_data[exp_key][dataset_name] = {
+                "run_name": run_name,
+                "run_id": run_id
+            }
+            
+            f.seek(0)
+            f.truncate()
+            json.dump(runs_data, f, indent=4)
+            f.flush()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+def log_results(results, dataset_name, experiment_name, csv_path="results.csv"):
+    """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
+    experiment_col = experiment_name.replace("_", " ").title().strip()
+
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(csv_path, 'a+') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            content = f.read()
+            if content:
+                from io import StringIO
+                df = pd.read_csv(StringIO(content), dtype=str)
+            else:
+                df = pd.DataFrame(columns=["Dataset", "Metric"])
+
+            # normalize
+            df = df.astype(object)
+            df["Dataset"] = df["Dataset"].astype(str).str.strip().replace(r"^\s*$", pd.NA, regex=True).ffill()
+            df["Metric"] = df["Metric"].astype(str).str.strip()
+
+            # ensure column exists
+            if experiment_col not in df.columns:
+                df[experiment_col] = None
+
+            # insert / update
+            for metric_name, val in results.items():
+                if metric_name == "loss":
+                    continue
+
+                metric_name = metric_name.strip()
+                mask = (df["Dataset"] == dataset_name) & (df["Metric"] == metric_name)
+
+                if mask.any():
+                    df.loc[mask, experiment_col] = f"{val*100:.2f}"
+                else:
+                    new_row = {
+                        "Dataset": dataset_name,
+                        "Metric": metric_name,
+                        experiment_col: f"{val*100:.2f}"
+                    }
+                    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+            # keep table structured
+            metric_order = ["OA", "mIoU", "mF1"]
+            df["Metric"] = pd.Categorical(df["Metric"], categories=metric_order, ordered=True)
+            df = df.sort_values(by=["Dataset", "Metric"]).reset_index(drop=True)
+
+            # blank repeated dataset names
+            df_out = df.copy()
+            df_out["Dataset"] = df_out["Dataset"].where(
+                df_out["Dataset"] != df_out["Dataset"].shift(), "")
+
+            f.seek(0)
+            f.truncate()
+            df_out.to_csv(f, index=False, float_format="%.2f")
+            f.flush()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def log_per_class_results(results, experiment_name, csv_path="benchmark_per_class_results.csv"):
+    """results: dict mapping class names to F1 values"""
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(csv_path, 'a+') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            content = f.read()
+            if content:
+                from io import StringIO
+                df = pd.read_csv(StringIO(content), dtype=str)
+            else:
+                df = pd.DataFrame(columns=["Class"])
+
+            df = df.astype(object)
+            df["Class"] = df["Class"].astype(str).str.strip()
+
+            experiment_col = experiment_name.replace("_", " ").title().strip()
+
+            if experiment_col not in df.columns:
+                df[experiment_col] = None
+
+            for class_name, val in results.items():
+                class_name = str(class_name).strip()
+                mask = df["Class"] == class_name
+
+                if mask.any():
+                    df.loc[mask, experiment_col] = f"{val*100:.2f}"
+                else:
+                    new_row = {
+                        "Class": class_name,
+                        experiment_col: f"{val*100:.2f}"
+                    }
+                    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+            f.seek(0)
+            f.truncate()
+            df.to_csv(f, index=False, float_format="%.2f")
+            f.flush()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 def setup_logging(level="info"):
     class ColorFormatter(logging.Formatter):

@@ -48,3 +48,7 @@ class SegmentationDataModule(L.LightningDataModule):
 
     def train_dataloader(self): return self._create_dataloader(self.train_ds, shuffle=True)
     def val_dataloader(self): return self._create_dataloader(self.val_ds, shuffle=False)
+
+    def on_train_epoch_start(self):
+        if hasattr(self.train_ds, "shift_grid"):
+            self.train_ds.shift_grid(self.trainer.current_epoch)

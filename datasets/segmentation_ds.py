@@ -52,9 +52,9 @@ class SegmentationDataset(Dataset):
         # allocate shared memory for offsets so multiple workers can sample from the same grid
         self.offsets = torch.zeros((len(self.samples), 2), dtype=torch.int32).share_memory_()
         self.current_epoch = -1
-        self.set_epoch(0)
+        self.shift_grid(0)
 
-    def set_epoch(self, epoch):
+    def shift_grid(self, epoch):
         """Generates grid offset per sample (must be called by the Custom Epoch Hook before every new epoch)"""
         if not self.grid_sampling or self.current_epoch == epoch:
             return

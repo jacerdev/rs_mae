@@ -59,16 +59,17 @@ class CurriculumMasker(nn.Module, Masker):
         normalized = (saliency - s_min) / (s_max - s_min + 1e-6)
         return normalized
 
-    def forward(self, x, mask_ratio=0.75, phase="curriculum", raw_imgs=None, **kwargs):
-        if phase == "curriculum":
+    def forward(self, x, mask_ratio=0.75, phase="", raw_imgs=None, **kwargs):
+        if phase == "validation":
+            B, N, D = x.shape
+            scores = torch.rand(B, N, device=x.device)
+            
+        else:
             if raw_imgs is None:
                 raise ValueError("raw_imgs must be provided for CurriculumMasker in curriculum phase")
 
             saliency = self.get_normalized_saliency(raw_imgs).flatten(1) # (B, N)
             scores = self.compute_masking_score(saliency, TRAINING_STATE.epoch, self.max_epochs)
-        
-        else: # val: random masking
-            B, N, D = x.shape
-            scores = torch.rand(B, N, device=x.device)
+
         
         return Masker.__call__(self, x, mask_ratio, scores, **kwargs)

@@ -169,8 +169,7 @@ class SegmentationViTModule(L.LightningModule):
         combined = torch.cat(rows, dim=0)
         
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
-        tag = f"predictions / {split}"
-        self.logger.log_image(key=tag, images=[grid], step=self.global_step)
+        self.logger.log_image(key=f"predictions/{split}", images=[grid], step=self.global_step)
 
 
 def get_parameter_groups_llrd(model, weight_decay, backbone_lr, decoder_lr, layer_lr_decay): # model is a SegmentationViT

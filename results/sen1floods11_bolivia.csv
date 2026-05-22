@@ -1,3 +1,0 @@
-Class,Baseline,Feat Guided,Curriculum Ndi,Curriculum Hog,Hog Weighted
-No flood,98.17,98.20,98.16,98.20,98.09
-Flood,89.26,89.47,89.07,89.46,88.51

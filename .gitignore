@@ -16,6 +16,7 @@ reben_profiled.py
 /sandbox/
 /wandb/
 /cloud/
+/results/
 
 # Other
 /.git/
