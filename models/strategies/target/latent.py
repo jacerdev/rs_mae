@@ -65,7 +65,7 @@ class LatentTarget(nn.Module, TargetGenerator):
         imgs: (B, C, H, W) normalized imagery
         returns: Tuple of (pixel_tokens, latent_tokens)
         """
-        if online_encoder is not None:
+        if online_encoder is not None and online_encoder.training:
             self._update_ema(online_encoder)
 
         # prepare latent targets
