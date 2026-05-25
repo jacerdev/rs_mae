@@ -1,5 +1,5 @@
 # @package _global_
-experiment_name: "curriculum_ndi_mix"
+experiment_name: "curriculum_ndi_mixed"
 
 masker:
   _target_: models.strategies.masker.CurriculumMasker
