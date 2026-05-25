@@ -10,7 +10,7 @@ from utils.spatial_ops import patchify, z_normalize, z_denormalize
 class LatentTarget(nn.Module, TargetGenerator):
     """
     TargetGenerator that combines original pixel patches and latent features
-    from a momentum encoder as targets.
+    from a momentum encoder as targets
     """
     def __init__(self, patch_size, in_chans, embed_dim, m=0.996, norm_pix=True, **kwargs):
         nn.Module.__init__(self)
@@ -45,7 +45,6 @@ class LatentTarget(nn.Module, TargetGenerator):
 
     @torch.no_grad()
     def _update_ema(self, online_encoder):
-        """update EMA parameters from the online encoder"""
         submodules = [
             (self.patch_embed, online_encoder.patch_embed),
             (self.pos_embed, online_encoder.pos_embed),
@@ -63,7 +62,7 @@ class LatentTarget(nn.Module, TargetGenerator):
     def forward(self, imgs, online_encoder=None, **kwargs):
         """
         imgs: (B, C, H, W) normalized imagery
-        returns: Tuple of (pixel_tokens, latent_tokens)
+        returns: (pixel_tokens, latent_tokens)
         """
         if online_encoder is not None and online_encoder.training:
             self._update_ema(online_encoder)
@@ -106,7 +105,7 @@ class LatentTarget(nn.Module, TargetGenerator):
 
 
 class LatentTargetLoss(MaskedMSELoss):
-    """wrapper for MaskedMSELoss to return individual losses as a dict"""
+    """wrapper to return individual losses as a dict"""
     def __call__(self, pred, target, mask, **kwargs):
         total_loss, loss_components = super().__call__(pred, target, mask, **kwargs)
         

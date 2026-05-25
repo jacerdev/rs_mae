@@ -1,0 +1,20 @@
+Class,Latent Target,Baseline
+Urban fabric,70.15,69.70
+Industrial or commercial units,55.05,60.50
+Arable land,73.55,75.46
+Permanent crops,17.28,12.69
+Pastures,61.64,70.35
+Complex cultivation patterns,19.81,28.47
+"Land principally occupied by agriculture, with significant areas of natural vegetation",9.59,10.84
+Agro-forestry areas,0.00,0.00
+Broad-leaved forest,53.20,61.66
+Coniferous forest,62.94,65.81
+Mixed forest,33.93,26.11
+Natural grassland and sparsely vegetated areas,22.81,19.81
+"Moors, heathland and sclerophyllous vegetation",0.49,4.82
+"Transitional woodland, shrub",13.16,17.23
+"Beaches, dunes, sands",10.84,10.07
+Inland wetlands,24.74,37.66
+Coastal wetlands,53.05,27.41
+Inland waters,77.23,75.91
+Marine waters,98.62,98.58

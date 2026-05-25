@@ -1,13 +1,14 @@
 # @package _global_
-experiment_name: "curriculum_ndi"
+experiment_name: "curriculum_ndi_.8"
 
 masker:
   _target_: models.strategies.masker.CurriculumMasker
   max_epochs: ${max_epochs}
-  easy_end: 0.0
-  hard_start: 0.5
-  min_w: -0.5
-  max_w: 0.5
+  easy_end: 0.0 # no easy phase (min_w is not used)
+  hard_start: 0.3 # start hard phase at 30% of training
+  min_w: null
+  max_w: 0.8
+  mixed_batch: false
 
 saliency_extractor:
   _target_: utils.features.NDISaliency

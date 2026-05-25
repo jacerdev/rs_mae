@@ -1,0 +1,7 @@
+Class,Latent Target,Baseline
+Well-managed plantation,37.28,52.75
+Poorly-managed plantation,66.10,72.33
+Non-plantation,53.01,61.86
+Residential,80.56,87.72
+Background_cashew,75.60,79.16
+Uncertain,0.32,5.21

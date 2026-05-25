@@ -179,7 +179,7 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
 
         ood_split = split_name if split_name != "test" else ""
         _dataset_name = (cfg.dataset_name + ("_" + ood_split)).replace("_", " ").title().strip()
-        log_results(results, _dataset_name, cfg.experiment_name, csv_path=f"{SAVE_DIR}/benchmark_results.csv")
+        log_results(results, _dataset_name, cfg.experiment_name, csv_path=f"{SAVE_DIR}/benchmark_results-{cfg.seed}.csv")
 
         # per class results
         per_class_results = {}
@@ -188,7 +188,7 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
             per_class_results[class_name] = f1_val.item()
 
         suffix = f"_{ood_split}" if ood_split else ""
-        log_per_class_results(per_class_results, cfg.experiment_name, csv_path=f"{SAVE_DIR}/{cfg.dataset_name}{suffix}.csv")
+        log_per_class_results(per_class_results, cfg.experiment_name, csv_path=f"{SAVE_DIR}/{cfg.dataset_name}{suffix}-{cfg.seed}.csv")
 
         for class_name, val in per_class_results.items():
             results[f"F1 - {class_name}"] = val

@@ -1,0 +1,58 @@
+{
+    "latent_target-42": {
+        "reben": {
+            "run_name": "latent_target-05.22_03:25",
+            "run_id": "f0tj47im"
+        },
+        "reben_7k": {
+            "run_name": "latent_target-reben_7k-05.22_11:25",
+            "run_id": "gp5k6ql9"
+        },
+        "cashew_plantation": {
+            "run_name": "latent_target-cashew_plantation-05.22_11:25",
+            "run_id": "qc4qb70w"
+        },
+        "c2seg_beijing": {
+            "run_name": "latent_target-c2seg_beijing-05.22_12:30",
+            "run_id": "9g6hc5ls"
+        },
+        "sen1floods11": {
+            "run_name": "latent_target-sen1floods11-05.22_12:30",
+            "run_id": "d0njynl2"
+        }
+    },
+    "baseline-42": {
+        "reben": {
+            "run_name": "baseline-05.22_17:55",
+            "run_id": "qf3s2f8e"
+        },
+        "reben_7k": {
+            "run_name": "baseline-reben_7k-05.23_02:52",
+            "run_id": "f014xbch"
+        },
+        "cashew_plantation": {
+            "run_name": "baseline-cashew_plantation-05.23_02:52",
+            "run_id": "tx720pnf"
+        },
+        "sen1floods11": {
+            "run_name": "baseline-sen1floods11-05.23_03:58",
+            "run_id": "iahnkoe1"
+        },
+        "c2seg_beijing": {
+            "run_name": "baseline-c2seg_beijing-05.23_03:58",
+            "run_id": "m9sflkcs"
+        }
+    },
+    "feat_guided-42": {
+        "reben": {
+            "run_name": "feat_guided-05.25_12:50",
+            "run_id": "4ht2wn4f"
+        }
+    },
+    "hog_weighted-42": {
+        "reben": {
+            "run_name": "hog_weighted-05.25_12:50",
+            "run_id": "dt1strih"
+        }
+    }
+}

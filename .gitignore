@@ -6,7 +6,6 @@ __pycache__/
 /todos.txt
 context.md
 reben_profiled.py
-/runs.json
 
 
 # Folders
@@ -16,7 +15,6 @@ reben_profiled.py
 /sandbox/
 /wandb/
 /cloud/
-/results/
 
 # Other
 /.git/

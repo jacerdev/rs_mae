@@ -4,10 +4,11 @@ experiment_name: "curriculum_hog"
 masker:
   _target_: models.strategies.masker.CurriculumMasker
   max_epochs: ${max_epochs}
-  easy_end: 0.0
-  hard_start: 0.5
-  min_w: -0.5
+  easy_end: 0.0 # no easy phase (min_w is not used)
+  hard_start: 0.5 # start hard phase at 50% of training
+  min_w: null
   max_w: 0.5
+  mixed_batch: false
 
 saliency_extractor:
   _target_: utils.features.HOGSaliency

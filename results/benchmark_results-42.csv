@@ -1,0 +1,19 @@
+Dataset,Metric,Latent Target,Baseline
+C2Seg Wuhan,OA,27.12,27.56
+,mIoU,7.75,8.66
+,mF1,11.30,12.92
+Cashew Plantation,OA,65.69,72.07
+,mIoU,39.45,47.26
+,mF1,52.15,59.84
+Reben 7K,OA,57.01,58.77
+,mIoU,35.45,38.45
+,mF1,49.81,53.37
+Reben 7K Ood,OA,56.27,60.28
+,mIoU,29.43,30.27
+,mF1,39.90,40.69
+Sen1Floods11,OA,97.64,97.52
+,mIoU,89.83,89.31
+,mF1,94.48,94.17
+Sen1Floods11 Bolivia,OA,96.69,96.66
+,mIoU,87.92,87.55
+,mF1,93.36,93.13

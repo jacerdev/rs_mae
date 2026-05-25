@@ -9,7 +9,7 @@ class CurriculumMasker(nn.Module, Masker):
     """
     Curriculum Masker that transitions from Easy to Random to Hard tasks based on saliency and epoch.
     """
-    def __init__(self, saliency_extractor, max_epochs, easy_end=0.1, hard_start=0.6, min_w=-0.5, max_w=0.7, **kwargs):
+    def __init__(self, saliency_extractor, max_epochs, easy_end=0., hard_start=1., min_w=0., max_w=0., mixed_batch=False, **kwargs):
         nn.Module.__init__(self)
         Masker.__init__(self, **kwargs)
         self.saliency_extractor = saliency_extractor
@@ -19,6 +19,7 @@ class CurriculumMasker(nn.Module, Masker):
         self.max_w = max_w
         self.easy_end = easy_end
         self.hard_start = hard_start
+        self.mixed_batch = mixed_batch
 
 
     def compute_masking_score(self, saliency, epoch, max_epochs):
@@ -38,14 +39,24 @@ class CurriculumMasker(nn.Module, Masker):
         
         # weights
         gamma = epoch / max_epochs
+        
         if gamma < self.easy_end: # Easy phase: saliency weight = min_w -> 0
             alpha = (1 - (gamma / self.easy_end)) * self.min_w
         elif gamma < self.hard_start: # Random phase: saliency weight = 0
             alpha = 0.0
         else: # Hard phase: saliency weight = 0 -> max_w
             alpha = ((gamma - self.hard_start) / (1.0 - self.hard_start)) * self.max_w
-        
-        return alpha * saliency + (1.0 - abs(alpha)) * noise
+            if self.mixed_batch:
+                sigma = 0.5 * alpha
+                
+                # sample from half-normal (mean=alpha, with values only lower than alpha)
+                z = torch.randn(saliency.shape[0], 1, device=saliency.device)
+                alpha_raw = alpha - (torch.abs(z) * sigma)
+                
+                alpha = torch.clamp(alpha_raw, min=0.0) # clamp at 0.0 to prevent negative alpha weights
+
+        alpha_abs = torch.abs(torch.as_tensor(alpha))
+        return alpha * saliency + (1.0 - alpha_abs) * noise
 
     def get_normalized_saliency(self, imgs):
         """Extracts and normalizes saliency to [0, 1] range."""
