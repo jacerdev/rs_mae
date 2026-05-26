@@ -46,7 +46,7 @@ def main(cfg: DictConfig):
     # Dataset
     train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
                                  ToTensorV2()], seed=cfg.seed)
-    val_transform = A.Compose([ToTensorV2()])
+    val_transform = A.Compose([ToTensorV2()], seed=cfg.seed)
 
     match cfg.dataset_name:
         case "reben_7k":
@@ -56,7 +56,7 @@ def main(cfg: DictConfig):
                                          A.PadIfNeeded(min_height=cfg.img_size, min_width=cfg.img_size,
                                          border_mode=cv2.BORDER_REFLECT), ToTensorV2()], seed=cfg.seed)
             val_transform = A.Compose([A.PadIfNeeded(min_height=cfg.img_size, min_width=cfg.img_size,
-                                       border_mode=cv2.BORDER_REFLECT), ToTensorV2()])
+                                       border_mode=cv2.BORDER_REFLECT), ToTensorV2()], seed=cfg.seed)
         case "burn_scars":
             dataset_class = BurnScarsDataset
             dataset_class_cfg = BurnScarsDataset_Cfg

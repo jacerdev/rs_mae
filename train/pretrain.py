@@ -66,7 +66,7 @@ def main(cfg: DictConfig):
     # Data
     train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),
                                  A.RandomCrop(cfg.img_size, cfg.img_size, p=1.0), ToTensorV2()], seed=cfg.seed)
-    val_transform = A.Compose([A.CenterCrop(cfg.img_size, cfg.img_size), ToTensorV2()])
+    val_transform = A.Compose([A.CenterCrop(cfg.img_size, cfg.img_size), ToTensorV2()], seed=cfg.seed)
     
     data_module = ReBENDataModule(
         dataset_cfg=ReBENDataset_Cfg(**cfg.dataset),

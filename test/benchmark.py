@@ -51,14 +51,14 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
     logging.info(f"Loading checkpoint from {ckpt_path}")
 
     # Data
-    test_transform = A.Compose([ToTensorV2()])
+    test_transform = A.Compose([ToTensorV2()], seed=cfg.seed)
 
     match cfg.dataset_name:
         case "reben_7k":
             dataset_class = ReBEN7kDataset
             dataset_class_cfg = ReBEN7kDataset_Cfg
             test_transform = A.Compose([A.PadIfNeeded(min_height=cfg.img_size, min_width=cfg.img_size,
-                                         border_mode=cv2.BORDER_REFLECT), ToTensorV2()])
+                                         border_mode=cv2.BORDER_REFLECT), ToTensorV2()], seed=cfg.seed)
             splits_to_eval = ["test", "ood"]
         case "burn_scars":
             dataset_class = BurnScarsDataset
