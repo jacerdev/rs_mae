@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Any
+from typing import List, Any, Union
 
 # ==============================================================================
 # Datasets Configurations
@@ -19,7 +19,7 @@ class ReBENDataset_Cfg:
     seed: int
     blocklist_path: str
 
-    return_mask: bool
+    return_mask: Union[bool, str] 
 
 @dataclass
 class SegmentationDataset_Cfg:

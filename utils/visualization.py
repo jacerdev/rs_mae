@@ -1,6 +1,6 @@
 import cv2
 import math
-from matplotlib.colors import to_rgb
+from matplotlib.colors import to_rgb, hsv_to_rgb
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -66,10 +66,14 @@ def get_color_tensor(dataset_name=None, max_id=None, cmap_name="tab20"):
     """Creates a tensor of shape (max_class_id + 2, 3) for efficient RGB masking"""
     if dataset_name is None:
         if max_id is None: raise ValueError("max_id must be provided when dataset_name is None")
-        cmap_source = plt.get_cmap(cmap_name)
         
-        # +2 allows index -1 (ignore_index class) to access the last element safely
-        colors = cmap_source(np.linspace(0, 1, max_id + 2))[:, :3]  # drop alpha
+        n = max_id + 2 # +2 allows index -1 (ignore_index class) to access the last element safely
+
+        if cmap_name == "custom":
+            colors = np.array([hsv_to_rgb((i / n, 0.75, 0.95)) for i in range(n)])
+        else:
+            cmap_source = plt.get_cmap(cmap_name)
+            colors = cmap_source(np.linspace(0, 1, n))[:, :3]
         return torch.tensor(colors, dtype=torch.float32)
         
     dataset_name = dataset_name.lower()
@@ -101,7 +105,7 @@ def get_color_tensor(dataset_name=None, max_id=None, cmap_name="tab20"):
 
 def prepare_segmentation_visuals(imgs, masks, preds, bands=None, dataset_name=None):
     color_tensor = get_color_tensor(dataset_name) if dataset_name is not None else \
-                    get_color_tensor(max_id=preds.shape[1]) # num_classes
+                    get_color_tensor(max_id=preds.shape[1], cmap_name="custom") # num_classes
     color_tensor = color_tensor.to(masks.device)
 
     # imgs

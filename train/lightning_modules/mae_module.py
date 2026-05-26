@@ -258,9 +258,7 @@ class MAEModule(L.LightningModule):
 
         batch, pred, mask = outputs["imgs"], outputs["pred"].detach(), outputs["mask"].detach()
         imgs, gt_masks = batch
-        imgs = imgs.detach()
-        gt_masks = gt_masks.detach()
-        
+        imgs, gt_masks = imgs.detach(), gt_masks.detach()
         B, _, H, W = imgs.shape
 
         num_samples = min(B, 5)
@@ -272,23 +270,20 @@ class MAEModule(L.LightningModule):
 
         mask_expanded = mask.reshape(num_samples, h, w).repeat_interleave(p, dim=1).repeat_interleave(p, dim=2).unsqueeze(1)
         
+        #  unmasked input,target, output
         C_out = pred.shape[-1] // (p ** 2)
         pred_spatial = unpatchify(pred, p, H, W, C_out)
-                
-        imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(
-            imgs, gt_masks, pred_spatial, 
-            bands=self.bands, dataset_name="reben"
-        )
+        imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(imgs, gt_masks, pred_spatial,
+                                                                bands=self.bands, dataset_name=None)
+        pred_vis = gt_vis * (1 - mask_expanded) + pred_vis * mask_expanded
 
+        # input (masked image)
         masked_imgs = imgs_vis * (1 - mask_expanded)
 
-        rows = [
-            masked_imgs, # the mask
-            imgs_vis, # the actual image
-            gt_vis, # the target (gt_mask)
-            pred_vis # the prediction (segmentation mask)
-        ]
-        
+        rows = [masked_imgs, # input
+                imgs_vis, # unmasked input
+                gt_vis, # target
+                pred_vis] # output
         combined = torch.cat(rows, dim=0)
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
         self.logger.log_image(key=f"reconstructions/{split}", images=[grid], step=self.global_step)

@@ -7,7 +7,7 @@ masker:
 target:
   _target_: models.strategies.target.SegmentationTarget
   patch_size: ${patch_size}
-  num_classes: 19
+  num_classes: 32
 
 loss:
   _target_: models.strategies.target.segmentation.MaskedCrossEntropyLoss

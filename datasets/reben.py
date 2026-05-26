@@ -193,8 +193,16 @@ class ReBENDataset(Dataset):
         # lookup table to convert mask classes
         if self.return_mask:
             self.lut = torch.full((1000,), -1, dtype=torch.long) # -1 is the ignore_index
-            for k, v in ReBENDataset.CLC_TO_LULC.items():
-                self.lut[k] = v
+            
+            if self.return_mask == "clc":
+                # create a contiguous mapping
+                valid_clc = sorted([k for k, v in ReBENDataset.CLC_TO_LULC.items() if v != -1])
+                clc_to_contiguous = {clc: i for i, clc in enumerate(valid_clc)}
+                for k in ReBENDataset.CLC_TO_LULC.keys():
+                    self.lut[k] = clc_to_contiguous.get(k, -1) # -1 for ignored classes
+            else:
+                for k, v in ReBENDataset.CLC_TO_LULC.items():
+                    self.lut[k] = v
 
     def __len__(self):
         return len(self.keys)

@@ -55,7 +55,7 @@ def main(cfg: DictConfig):
         case "latent_target":
             target_kwargs = {"embed_dim": cfg.model.embed_dim}
         case "segmentation_target":
-            cfg.dataset["return_mask"] = True
+            cfg.dataset["return_mask"] = "clc"
         case _:
             raise ValueError("Experiment not recognized.")
 
