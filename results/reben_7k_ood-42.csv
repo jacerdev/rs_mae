@@ -1,4 +1,4 @@
-Class,Latent Target,Baseline,Feat Guided,Hog Weighted,Curriculum Ndi Mixed,Curriculum Ndi W08
+Class,Latent Target,Baseline,Feat Guided,Hog Weighted,Curriculum Ndi Mixed W08,Curriculum Ndi W08
 Urban fabric,70.15,69.70,70.57,69.37,66.98,70.92
 Industrial or commercial units,55.05,60.50,57.80,59.88,55.03,63.86
 Arable land,73.55,75.46,73.33,75.75,74.55,75.48

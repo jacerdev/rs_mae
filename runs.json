@@ -87,25 +87,25 @@
             "run_id": "jq6fkok8"
         }
     },
-    "curriculum_ndi_mixed-42": {
+    "curriculum_ndi_mixed_w08-42": {
         "reben": {
-            "run_name": "curriculum_ndi_mixed-05.25_19:31",
+            "run_name": "curriculum_ndi_mixed_w08-05.25_19:31",
             "run_id": "67cils2e"
         },
         "reben_7k": {
-            "run_name": "curriculum_ndi_mixed-reben_7k-05.26_04:00",
+            "run_name": "curriculum_ndi_mixed_w08-reben_7k-05.26_04:00",
             "run_id": "uhd0osq5"
         },
         "cashew_plantation": {
-            "run_name": "curriculum_ndi_mixed-cashew_plantation-05.26_04:00",
+            "run_name": "curriculum_ndi_mixed_w08-cashew_plantation-05.26_04:00",
             "run_id": "eo1xypcg"
         },
         "sen1floods11": {
-            "run_name": "curriculum_ndi_mixed-sen1floods11-05.26_05:03",
+            "run_name": "curriculum_ndi_mixed_w08-sen1floods11-05.26_05:03",
             "run_id": "h32b4pzi"
         },
         "c2seg_beijing": {
-            "run_name": "curriculum_ndi_mixed-c2seg_beijing-05.26_05:03",
+            "run_name": "curriculum_ndi_mixed_w08-c2seg_beijing-05.26_05:03",
             "run_id": "zz5qbn0y"
         }
     },

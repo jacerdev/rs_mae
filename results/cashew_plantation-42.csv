@@ -1,4 +1,4 @@
-Class,Latent Target,Baseline,Feat Guided,Hog Weighted,Curriculum Ndi Mixed,Curriculum Ndi W08
+Class,Latent Target,Baseline,Feat Guided,Hog Weighted,Curriculum Ndi Mixed W08,Curriculum Ndi W08
 Well-managed plantation,37.28,52.75,54.45,53.71,54.99,55.32
 Poorly-managed plantation,66.10,72.33,72.18,72.37,73.14,73.46
 Non-plantation,53.01,61.86,59.40,63.06,61.81,62.94
