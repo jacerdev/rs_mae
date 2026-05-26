@@ -1,3 +1,3 @@
-Class,Latent Target,Baseline,Feat Guided,Hog Weighted
-No flood,98.06,98.05,98.17,98.05
-Flood,88.67,88.21,89.57,88.17
+Class,Latent Target,Baseline,Feat Guided,Hog Weighted,Curriculum Ndi Mixed,Curriculum Ndi W08
+No flood,98.06,98.05,98.17,98.05,98.05,98.10
+Flood,88.67,88.21,89.57,88.17,88.43,88.92

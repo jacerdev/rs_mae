@@ -1,14 +1,14 @@
-Class,Latent Target,Baseline,Feat Guided
-Surface water,77.82,75.84,61.59
-Street,17.82,32.18,38.06
-Urban Fabric,5.61,9.73,30.90
-"Industrial, commercial and transport",13.99,19.39,27.38
-"Mine, dump, and construction sites",5.04,3.55,5.81
-"Artificial, vegetated areas",11.28,11.14,13.79
-Arable Land,0.00,0.00,10.53
-Permanent Crops,0.00,0.00,2.72
-Pastures,0.00,0.00,0.00
-Forests,15.32,16.14,36.68
-Shrub,0.02,0.01,0.01
-Open spaces with no vegetation,0.00,0.00,0.00
-Inland wetlands,0.00,0.00,0.00
+Class,Latent Target,Baseline,Feat Guided,Hog Weighted,Curriculum Ndi Mixed,Curriculum Ndi W08
+Surface water,77.82,75.84,61.59,76.21,77.55,80.20
+Street,17.82,32.18,38.06,31.99,32.87,32.46
+Urban Fabric,5.61,9.73,30.90,9.81,13.57,15.67
+"Industrial, commercial and transport",13.99,19.39,27.38,14.89,19.84,22.60
+"Mine, dump, and construction sites",5.04,3.55,5.81,3.98,3.62,4.13
+"Artificial, vegetated areas",11.28,11.14,13.79,11.25,11.84,11.65
+Arable Land,0.00,0.00,10.53,0.01,0.07,0.00
+Permanent Crops,0.00,0.00,2.72,0.00,0.00,0.00
+Pastures,0.00,0.00,0.00,0.00,0.00,0.00
+Forests,15.32,16.14,36.68,29.13,22.45,20.20
+Shrub,0.02,0.01,0.01,0.41,0.02,0.03
+Open spaces with no vegetation,0.00,0.00,0.00,0.00,0.00,0.00
+Inland wetlands,0.00,0.00,0.00,0.00,0.00,0.00
