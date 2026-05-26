@@ -19,6 +19,8 @@ class ReBENDataset_Cfg:
     seed: int
     blocklist_path: str
 
+    return_mask: bool
+
 @dataclass
 class SegmentationDataset_Cfg:
     grid_sampling: bool

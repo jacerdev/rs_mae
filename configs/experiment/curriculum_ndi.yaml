@@ -1,5 +1,5 @@
 # @package _global_
-experiment_name: "curriculum_ndi_w08"
+experiment_name: "curriculum_ndi"
 
 masker:
   _target_: models.strategies.masker.CurriculumMasker
@@ -7,7 +7,7 @@ masker:
   easy_end: 0.0 # no easy phase (min_w is not used)
   hard_start: 0.3 # start hard phase at 30% of training
   min_w: null
-  max_w: 0.8
+  max_w: 0.5
   mixed_batch: false
 
 saliency_extractor:

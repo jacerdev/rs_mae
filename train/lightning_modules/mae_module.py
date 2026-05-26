@@ -94,8 +94,11 @@ class MAEModule(L.LightningModule):
 
     def _log_reconstructions(self, outputs, split):
         from models.strategies.target import HOGNDITarget
+        from models.strategies.target.segmentation import SegmentationTarget
         if isinstance(self.model.target, HOGNDITarget):
             self._log_hog_ndi_reconstructions(outputs, split)
+        elif isinstance(self.model.target, SegmentationTarget):
+            self._log_segmentation_reconstructions(outputs, split)
         else:
             self._log_pixel_reconstructions(outputs, split)
 
@@ -249,3 +252,43 @@ class MAEModule(L.LightningModule):
                             hog_recon_overlayed], dim=0)
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
         self.logger.log_image(key=f"reconstructions/{split}_hog", images=[grid], step=self.global_step)
+
+    def _log_segmentation_reconstructions(self, outputs, split):
+        from utils.visualization import prepare_segmentation_visuals
+
+        batch, pred, mask = outputs["imgs"], outputs["pred"].detach(), outputs["mask"].detach()
+        imgs, gt_masks = batch
+        imgs = imgs.detach()
+        gt_masks = gt_masks.detach()
+        
+        B, _, H, W = imgs.shape
+
+        num_samples = min(B, 5)
+        indices = torch.randperm(B, generator=torch.Generator().manual_seed(self.current_epoch % 5))[:num_samples]
+        imgs, gt_masks, pred, mask = imgs[indices], gt_masks[indices], pred[indices], mask[indices]
+
+        p = self.model.patch_embed.patch_size[0]
+        h, w = H // p, W // p
+
+        mask_expanded = mask.reshape(num_samples, h, w).repeat_interleave(p, dim=1).repeat_interleave(p, dim=2).unsqueeze(1)
+        
+        C_out = pred.shape[-1] // (p ** 2)
+        pred_spatial = unpatchify(pred, p, H, W, C_out)
+                
+        imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(
+            imgs, gt_masks, pred_spatial, 
+            bands=self.bands, dataset_name="reben"
+        )
+
+        masked_imgs = imgs_vis * (1 - mask_expanded)
+
+        rows = [
+            masked_imgs, # the mask
+            imgs_vis, # the actual image
+            gt_vis, # the target (gt_mask)
+            pred_vis # the prediction (segmentation mask)
+        ]
+        
+        combined = torch.cat(rows, dim=0)
+        grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
+        self.logger.log_image(key=f"reconstructions/{split}", images=[grid], step=self.global_step)

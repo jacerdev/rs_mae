@@ -155,16 +155,19 @@ class MaskedAutoencoderViT(nn.Module):
         return self.loss(pred, target, mask, **kwargs)
 
     def forward(self, imgs, mask_ratio=0.75, **kwargs):
+        gt_masks = None
+        if isinstance(imgs, (tuple, list)): imgs, gt_masks = imgs
+
         raw_imgs = torch.nan_to_num(imgs.detach(), nan=0.0, posinf=0.0, neginf=0.0)
 
         if self.normalize:
             imgs = (imgs - self.mean) / self.std
         imgs = torch.nan_to_num(imgs, nan=0.0, posinf=0.0, neginf=0.0)
 
-        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, raw_imgs=raw_imgs, **kwargs)
+        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, raw_imgs=raw_imgs, gt_masks=gt_masks, **kwargs)
         pred = self.forward_decoder(latent, ids_restore)
         
-        loss, loss_components = self.forward_loss(imgs, pred, mask, latent=latent, raw_imgs=raw_imgs, **kwargs)
+        loss, loss_components = self.forward_loss(imgs, pred, mask, raw_imgs=raw_imgs, gt_masks=gt_masks, latent=latent, **kwargs)
         return loss, pred, mask, loss_components
 
 

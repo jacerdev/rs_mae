@@ -54,6 +54,8 @@ def main(cfg: DictConfig):
             loss_kwargs = {"saliency_extractor": instantiate(cfg.saliency_extractor)}
         case "latent_target":
             target_kwargs = {"embed_dim": cfg.model.embed_dim}
+        case "segmentation_target":
+            cfg.dataset["return_mask"] = True
         case _:
             raise ValueError("Experiment not recognized.")
 

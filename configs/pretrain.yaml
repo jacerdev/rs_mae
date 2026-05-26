@@ -77,3 +77,5 @@ dataset:
   test_to_train_frac: 1.0
   seed: ${seed}
   blocklist_path: "datasets/splits/reben_7k.csv"
+
+  return_mask: false

@@ -1,20 +1,20 @@
-Class,Latent Target,Baseline
-Urban fabric,71.76,72.70
-Industrial or commercial units,46.76,52.37
-Arable land,69.18,69.65
-Permanent crops,44.58,52.81
-Pastures,35.11,37.33
-Complex cultivation patterns,29.85,31.12
-"Land principally occupied by agriculture, with significant areas of natural vegetation",35.08,35.38
-Agro-forestry areas,59.49,61.17
-Broad-leaved forest,59.73,61.66
-Coniferous forest,65.62,66.30
-Mixed forest,57.77,57.88
-Natural grassland and sparsely vegetated areas,38.32,44.92
-"Moors, heathland and sclerophyllous vegetation",38.57,37.02
-"Transitional woodland, shrub",29.11,38.98
-"Beaches, dunes, sands",3.54,19.67
-Inland wetlands,49.86,52.09
-Coastal wetlands,49.35,53.78
-Inland waters,73.18,77.22
-Marine waters,89.50,92.03
+Class,Latent Target,Baseline,Feat Guided,Hog Weighted
+Urban fabric,71.76,72.70,74.48,72.87
+Industrial or commercial units,46.76,52.37,55.47,47.37
+Arable land,69.18,69.65,70.82,68.37
+Permanent crops,44.58,52.81,50.45,55.30
+Pastures,35.11,37.33,37.63,37.97
+Complex cultivation patterns,29.85,31.12,33.34,33.07
+"Land principally occupied by agriculture, with significant areas of natural vegetation",35.08,35.38,38.44,37.97
+Agro-forestry areas,59.49,61.17,63.40,60.50
+Broad-leaved forest,59.73,61.66,60.78,62.78
+Coniferous forest,65.62,66.30,68.03,69.61
+Mixed forest,57.77,57.88,57.63,53.67
+Natural grassland and sparsely vegetated areas,38.32,44.92,39.31,38.58
+"Moors, heathland and sclerophyllous vegetation",38.57,37.02,37.26,43.71
+"Transitional woodland, shrub",29.11,38.98,41.07,34.09
+"Beaches, dunes, sands",3.54,19.67,15.22,22.18
+Inland wetlands,49.86,52.09,52.49,53.25
+Coastal wetlands,49.35,53.78,51.10,48.15
+Inland waters,73.18,77.22,81.22,78.45
+Marine waters,89.50,92.03,94.89,92.24

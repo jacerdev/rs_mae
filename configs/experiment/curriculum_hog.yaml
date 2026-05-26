@@ -8,7 +8,7 @@ masker:
   hard_start: 0.5 # start hard phase at 50% of training
   min_w: null
   max_w: 0.5
-  mixed_batch: false
+  mixed_batch: false ################################
 
 saliency_extractor:
   _target_: utils.features.HOGSaliency
