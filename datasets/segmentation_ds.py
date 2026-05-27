@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import Dataset
 
 from .reben import ReBENDataset
-from .data_loaders import load_reben_7k, load_burn_scars, load_sen1floods11, load_cashew_plantation, load_c2seg
+from .data_loaders import load_reben_7k, load_burn_scars, load_sen1floods11, load_cashew_plantation, load_c2seg, load_mmhunan
 
 class SegmentationDataset(Dataset):
     """stochastic grid-sampling with a translational per-epoch offset (relies on current_epoch being updated at the start of each epoch)"""
@@ -215,6 +215,35 @@ class C2SegDataset(SegmentationDataset):
                  crop_size=112, grid_sampling=True):
         
         samples, masks, ids = load_c2seg(data_dir, city=city, split=split, split_frac=split_frac, key='MSI', bands=bands)
+            
+        super().__init__(
+            samples=samples,
+            masks=masks,
+            grid_sampling=grid_sampling,
+            crop_size=crop_size,
+            transform=transform,
+            normalize=normalize, bands=bands,
+            ids=ids
+        )
+
+class MMHunanDataset(SegmentationDataset):
+    # https://github.com/LauraChow/HunanMultimodalDataset
+    CLASSES = {
+        -1: "Missing data",
+        0: "Cropland",
+        1: "Forest",
+        2: "Grassland",
+        3: "Wetland",
+        4: "Water",
+        5: "Unused land",
+        6: "Built-up area"
+    }
+    BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
+
+    def __init__(self, data_dir, split, bands=None, normalize=False, transform=None,
+                 crop_size=112, grid_sampling=True):
+        
+        samples, masks, ids = load_mmhunan(data_dir, split, bands)
             
         super().__init__(
             samples=samples,

@@ -35,7 +35,8 @@ def main(cfg: DictConfig):
         seed=cfg.seed,
         dataset_name="reben",
         run_name=cfg.wandb.run_name, # or wandb_logger.experiment.name
-        run_id=wandb_logger.experiment.id
+        run_id=wandb_logger.experiment.id,
+        json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "runs_dummy.json"
     )
 
     # Experiment
@@ -124,16 +125,19 @@ def main(cfg: DictConfig):
             resume_path = str(last_ckpt_path)
         else:
             logging.info(f"No last checkpoint found at {last_ckpt_path}")
+    elif cfg.resume_ckpt_path:
+        logging.info(f"Resuming Lightning training from checkpoint: {cfg.resume_ckpt_path}")
+        resume_path = cfg.resume_ckpt_path
     
     # Train
     exit_code = 1
     try:
-        # XXX
-        mock_ckpt_path = cfg.paths.get("mock_ckpt_path", None)
-        if mock_ckpt_path:
+        # XXX initialize with a pretrained MAE checkpoint XXX
+        init_ckpt_path = cfg.paths.get("init_ckpt_path", None)
+        if init_ckpt_path and not resume_path:
             from models.backbones.mae_vit import load_pretrained_mae_weights
-            logging.warning(f"=== LOADING MOCK weights from {mock_ckpt_path} ===")
-            load_pretrained_mae_weights(model.model, mock_ckpt_path, cfg.bands)
+            logging.warning(f"=== LOADING weights from {init_ckpt_path} ===")
+            load_pretrained_mae_weights(model.model, init_ckpt_path, cfg.bands)
         # XXX
 
         # re-seed before training to ensure deterministic sample order regardless of model initialization
@@ -142,10 +146,7 @@ def main(cfg: DictConfig):
             
         # Export the best checkpoint path
         best_model_path = checkpoint_callback.best_model_path
-        #if cfg.last_ckpt: best_model_path = checkpoint_callback.last_model_path
-        logging.info(f"Exporting best model path to {cfg.ckpt_export_path}: {best_model_path}")
-        with open(cfg.ckpt_export_path, "w") as f:
-            f.write(best_model_path)
+        logging.info(f"Best model path: {best_model_path}")
         exit_code = 0
     finally:
         wandb.finish(exit_code=exit_code)

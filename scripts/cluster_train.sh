@@ -75,7 +75,7 @@ for ((i=0; i<${#experiments[@]}; i+=2)); do
 done
 
 
-datasets=("reben_7k" "cashew_plantation" "sen1floods11" "c2seg")
+datasets=("reben_7k" "c2seg" "cashew_plantation" "mmhunan")
 
 # Loop over datasets with a 2-step jump for parallel finetuning
 for experiment in "${experiments[@]}"; do

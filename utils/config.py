@@ -57,6 +57,12 @@ class CashewPlantationDataset_Cfg(SegmentationDataset_Cfg):
     normalize: bool
 
 @dataclass
+class MMHunanDataset_Cfg(SegmentationDataset_Cfg):
+    data_dir: str
+    bands: List[str]
+    normalize: bool
+
+@dataclass
 class C2SegDataset_Cfg(SegmentationDataset_Cfg):
     data_dir: str
     city: str

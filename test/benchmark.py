@@ -12,15 +12,14 @@ from torch.utils.data import DataLoader
 from torchmetrics.classification import MulticlassAccuracy, JaccardIndex, F1Score
 from tqdm import tqdm
 
-from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset
+from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset, MMHunanDataset
 from models.segmentation.segmentation_vit import SegmentationViT
-from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
+from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg, MMHunanDataset_Cfg
 from utils.spatial_ops import windowed_inference, windowed_evaluation
 from utils.utils import get_checkpoints_dir, find_best_ckpt, log_per_class_results, log_results
 from utils.visualization import plot_images, prepare_segmentation_visuals
 
 PLOT_RESULTS = False
-SAVE_DIR = "results/"
 
 class EvaluationDataset(torch.utils.data.Dataset):
     """Wrapper to add ids to dataset items."""
@@ -34,16 +33,17 @@ class EvaluationDataset(torch.utils.data.Dataset):
 
 
 def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
-    if ckpt_path is None: # Local run
+    if ckpt_path is None: # Offline run (local pc)
         batch_size = 16
         num_workers = 2
         prefetch_factor = 2
 
-        ckpt_dir = get_checkpoints_dir(cfg.experiment_name, cfg.dataset_name, cfg.paths.artifacts_dir, wandb_project=cfg.wandb.project)
+        exp_key = f"{cfg.experiment_name}-{cfg.seed}"
+        ckpt_dir = get_checkpoints_dir(exp_key, cfg.dataset_name, cfg.paths.artifacts_dir, wandb_project=cfg.wandb.project, json_path="runs_dummy.json" if cfg.get("is_dummy", False) else cfg.runs_json)
         ckpt_path = find_best_ckpt(ckpt_dir)
         if not ckpt_path:
             raise FileNotFoundError(f"Could not find checkpoint in {ckpt_dir}")
-    else: # Cluster run
+    else: # online run
         batch_size = 64
         num_workers = cfg.num_workers
         prefetch_factor = cfg.prefetch_factor
@@ -52,6 +52,7 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
 
     # Data
     test_transform = A.Compose([ToTensorV2()], seed=cfg.seed)
+    splits_to_eval = ["test"]
 
     match cfg.dataset_name:
         case "reben_7k":
@@ -63,7 +64,6 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
         case "burn_scars":
             dataset_class = BurnScarsDataset
             dataset_class_cfg = BurnScarsDataset_Cfg
-            splits_to_eval = ["test"]
         case "sen1floods11":
             dataset_class = Sen1Floods11Dataset
             dataset_class_cfg = Sen1Floods11Dataset_Cfg
@@ -71,13 +71,14 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
         case "cashew_plantation":
             dataset_class = CashewPlantationDataset
             dataset_class_cfg = CashewPlantationDataset_Cfg
-            splits_to_eval = ["test"]
+        case "mmhunan":
+            dataset_class = MMHunanDataset
+            dataset_class_cfg = MMHunanDataset_Cfg
         case name if name.startswith("c2seg"):
             dataset_class = C2SegDataset
             dataset_class_cfg = C2SegDataset_Cfg
             if cfg.dataset_name == "c2seg_beijing": cfg.dataset_name, cfg.dataset.city = "c2seg_wuhan", "wuhan"
             elif cfg.dataset_name == "c2seg_augsburg": cfg.dataset_name, cfg.dataset.city = "c2seg_berlin", "berlin"
-            splits_to_eval = ["test"]
         case _:
             raise ValueError(f"Unknown dataset name extracted from wandb.run_name: {cfg.dataset_name}")
 
@@ -177,9 +178,6 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
                    f"mIoU": iou.compute().item(),
                    f"mF1": f1_per_class.nanmean().item()}
 
-        ood_split = split_name if split_name != "test" else ""
-        _dataset_name = (cfg.dataset_name + ("_" + ood_split)).replace("_", " ").title().strip()
-        log_results(results, _dataset_name, cfg.experiment_name, csv_path=f"{SAVE_DIR}/benchmark_results-{cfg.seed}.csv")
 
         # per class results
         per_class_results = {}
@@ -187,16 +185,19 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
             class_name = dataset_class.CLASSES.get(idx, f"Class {idx}")
             per_class_results[class_name] = f1_val.item()
 
-        suffix = f"_{ood_split}" if ood_split else ""
-        log_per_class_results(per_class_results, cfg.experiment_name, csv_path=f"{SAVE_DIR}/{cfg.dataset_name}{suffix}-{cfg.seed}.csv")
+        # log
+        dummy = '_dummy' if cfg.get('is_dummy', False) else ''
+        split_suffix = f'_{split_name}' if split_name != 'test' else ''
+        display_dataset_name = (cfg.dataset_name + split_suffix).replace("_", " ").title().strip()
+        log_results(results, display_dataset_name, cfg.experiment_name,
+                    csv_path=f"{cfg.results_dir}{dummy}/benchmark_results-{cfg.seed}.csv")
+        log_per_class_results(per_class_results, cfg.experiment_name,
+                              csv_path=f"{cfg.results_dir}{dummy}/{cfg.dataset_name}{split_suffix}-{cfg.seed}.csv")
 
-        for class_name, val in per_class_results.items():
-            results[f"F1 - {class_name}"] = val
-
-        # all results
-        prefix = f"{ood_split}_" if ood_split else ""
-        for k, v in results.items():
-            all_results[f"{prefix}{k}"] = v
+        # return all results
+        split_prefix = f'{split_name}_' if split_name != 'test' else ''
+        all_results.update({f"{split_prefix}{k}": v for k, v in results.items()})
+        all_results.update({f"{split_prefix}F1 - {class_name}": val for class_name, val in per_class_results.items()})
 
     return all_results
 

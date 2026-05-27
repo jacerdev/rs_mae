@@ -185,6 +185,39 @@ def load_c2seg(data_dir, city, split, split_frac=.8, key='MSI', bands=None):
 
     return [sample], [mask], [city]
 
+def load_mmhunan(data_dir, split, bands=None):
+    """Loads Hunan dataset samples and masks into memory"""
+    BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
+    
+    data_dir = Path(data_dir) / split
+    s2_dir, lc_dir = data_dir / 's2', data_dir / 'lc'
+    
+    igbp2hunan = np.array([255, 0, 1, 2, 1, 3, 4, 6, 6, 5, 6, 7, 255])
+    
+    samples, masks, ids = [], [], []
+    for img_path in sorted(s2_dir.iterdir()):
+        basename = img_path.name
+        mask_path = lc_dir / basename.replace("s2_", "lc_", 1)
+        
+        img = tifffile.imread(img_path)
+        lc = tifffile.imread(mask_path)
+        
+        lc[lc == 255] = 12
+        mask = igbp2hunan[lc]
+        mask[mask == 255] = -1 # map the resulting 255 ignore index to -1
+        mask = mask.astype(np.int8)
+        
+        if split != "test" and np.mean(mask != -1) < .35: # ignore_index = -1
+            continue
+        
+        img = _select_bands(img, BANDS, bands)
+        img = img.astype(np.int16)
+        
+        samples.append(img)
+        masks.append(mask)
+        ids.append(img_path.stem)
+        
+    return samples, masks, ids
 
 def _select_bands(img, available_bands, requested_bands=None):
     """Selects requested bands from a given image array (H, W, C)"""

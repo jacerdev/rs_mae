@@ -13,13 +13,13 @@ from pathlib import Path
 import torch
 import wandb
 
-from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset
+from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset, MMHunanDataset
 from models.segmentation.segmentation_vit import load_pretrained_encoder_weights
 from test.benchmark import run_benchmark
 from train.callbacks import TrainingStateCallback
 from train.lightning_modules import SegmentationDataModule, SegmentationViTModule
-from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg
-from utils.utils import log_run_to_json
+from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg, MMHunanDataset_Cfg
+from utils.utils import log_run_to_json, get_checkpoints_dir, find_best_ckpt
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="finetune")
@@ -40,7 +40,8 @@ def main(cfg: DictConfig):
         seed=cfg.seed,
         dataset_name=cfg.dataset_name,
         run_name=cfg.wandb.run_name, # or wandb_logger.experiment.name
-        run_id=wandb_logger.experiment.id
+        run_id=wandb_logger.experiment.id,
+        json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "runs_dummy.json"
     )
 
     # Dataset
@@ -68,6 +69,10 @@ def main(cfg: DictConfig):
         case "cashew_plantation":
             dataset_class = CashewPlantationDataset
             dataset_class_cfg = CashewPlantationDataset_Cfg
+
+        case "mmhunan":
+            dataset_class = MMHunanDataset
+            dataset_class_cfg = MMHunanDataset_Cfg
 
         case name if name.startswith("c2seg"):
             dataset_class = C2SegDataset
@@ -137,17 +142,23 @@ def main(cfg: DictConfig):
             logging.info(f"No last checkpoint found at {last_ckpt_path}")
 
     # Pretrained MAE weights
-    elif cfg.ckpt_export_path:
-        actual_path = cfg.ckpt_export_path
-        if actual_path.endswith(".txt"):
-            logging.info(f"Reading checkpoint path from text file: {actual_path}")
-            with open(actual_path, "r") as f:
-                actual_path = f.read().strip()
-                
-        load_pretrained_encoder_weights(model.model, actual_path, bands=cfg.dataset.bands)
-
     else:
-        raise ValueError("Training from scratch ?!")
+        pretrained_exp_key = f"{cfg.experiment_name}-{cfg.seed}"
+        logging.info(f"Fetching pretrained checkpoint for experiment: {pretrained_exp_key}")
+        
+        try:
+            ckpt_dir = get_checkpoints_dir(pretrained_exp_key, "reben", cfg.wandb.outdir, wandb_project=cfg.wandb.project, json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "runs_dummy.json")
+            actual_path = find_best_ckpt(ckpt_dir)
+            
+            if not actual_path:
+                raise FileNotFoundError(f"Could not find a valid checkpoint in {ckpt_dir}")
+                
+            logging.info(f"Found pretrained checkpoint at: {actual_path}")
+            load_pretrained_encoder_weights(model.model, str(actual_path), bands=cfg.dataset.bands)
+            
+        except Exception as e:
+            logging.error(f"Failed to load pretrained weights from runs.json: {e}")
+            raise e
 
     # Train
     exit_code = 1

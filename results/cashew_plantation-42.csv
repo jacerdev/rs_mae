@@ -1,7 +1,7 @@
-Class,Latent Target,Baseline,Feat Guided,Hog Weighted,Curriculum Ndi Mixed W08,Curriculum Ndi W08
-Well-managed plantation,37.28,52.75,54.45,53.71,54.99,55.32
-Poorly-managed plantation,66.10,72.33,72.18,72.37,73.14,73.46
-Non-plantation,53.01,61.86,59.40,63.06,61.81,62.94
-Residential,80.56,87.72,86.38,88.19,87.93,87.42
-Background_cashew,75.60,79.16,78.73,79.27,78.94,79.30
-Uncertain,0.32,5.21,8.24,16.39,17.98,8.47
+Class,Baseline,Latent Target,Feat Guided,Hog Weighted,Curriculum Ndi Mixed W08,Curriculum Ndi W08,Curriculum Ndi Mixed W10,Curriculum Ndi W10
+Well-managed plantation,52.75,37.28,54.45,53.71,54.99,55.32,53.84,53.89
+Poorly-managed plantation,72.33,66.10,72.18,72.37,73.14,73.46,72.78,73.51
+Non-plantation,61.86,53.01,59.40,63.06,61.81,62.94,61.32,63.04
+Residential,87.72,80.56,86.38,88.19,87.93,87.42,87.89,87.24
+Background_cashew,79.16,75.60,78.73,79.27,78.94,79.30,79.11,79.27
+Uncertain,5.21,0.32,8.24,16.39,17.98,8.47,17.95,13.98

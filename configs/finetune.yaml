@@ -8,7 +8,8 @@ defaults:
   - segmentation_ds: reben_7k
 
 experiment_name: "baseline"
-ckpt_export_path: "best_ckpt_${experiment_name}.txt"
+runs_json: "runs.json"
+results_dir: "results"
 
 # Training hyperparameters
 accumulate_grad_batches: 1

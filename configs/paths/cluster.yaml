@@ -7,5 +7,6 @@ sen1floods11_dir:      "${paths.prefix}/datasets/sen1floods11/"
 cashew_plantation_dir: "${paths.prefix}/datasets/cashew_plantation/"
 c2seg_dir:             "${paths.prefix}/datasets/c2seg/"
 burn_scars_dir:        "${paths.prefix}/datasets/burn_scars/"
+mmhunan_dir:           "${paths.prefix}/datasets/mmhunan/"
 
 wandb_outdir:          "${paths.prefix}/outputs/training_out/"

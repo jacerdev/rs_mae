@@ -6,8 +6,9 @@ sen1floods11_dir:      "/mnt/ssd/datasets/sen1floods11/"
 cashew_plantation_dir: "/mnt/ssd/datasets/cashew_plantation/"
 c2seg_dir:             "/mnt/ssd/datasets/c2seg/"
 burn_scars_dir:        "/mnt/ssd/datasets/burn_scars/"
+mmhunan_dir:           "/mnt/ssd/datasets/mmhunan/"
 
 wandb_outdir:          "/mnt/ssd/outputs/training_out/"
 
-mock_ckpt_path:        "/mnt/ssd/outputs/training_out/baseline_ep16.ckpt"
+init_ckpt_path:        "/mnt/ssd/outputs/training_out/baseline_ep16.ckpt"
 artifacts_dir:         "/mnt/ssd/.FINISHED_RUNS"
