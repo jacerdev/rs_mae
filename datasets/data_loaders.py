@@ -174,14 +174,24 @@ def load_c2seg(data_dir, city, split, split_frac=.8, key='MSI', bands=None):
     sample = sample.astype(np.int16)
     mask = (mask - 1).astype(np.int8) # decrement class ids by 1 to get ignore_index to -1
 
-    # train/validation split: split vertically (west/east)
-    split_idx = int(sample.shape[1] * split_frac)
-    if split == 'train':
-        sample = sample[:, :split_idx]
-        mask = mask[:, :split_idx]
-    elif split == 'validation':
-        sample = sample[:, split_idx:]
-        mask = mask[:, split_idx:]
+    if city in ['beijing', 'wuhan']:
+        # train/validation split: split vertically
+        split_idx = int(sample.shape[1] * split_frac)
+        if split == 'train':
+            sample = sample[:, :split_idx]
+            mask = mask[:, :split_idx]
+        elif split == 'validation':
+            sample = sample[:, split_idx:]
+            mask = mask[:, split_idx:]
+    else: # augsburg, berlin
+        # train/validation split: split horizontally
+        split_idx = int(sample.shape[0] * (1-split_frac))
+        if split == 'train':
+            sample = sample[split_idx:, :]
+            mask = mask[split_idx:, :]
+        elif split == 'validation':
+            sample = sample[:split_idx, :]
+            mask = mask[:split_idx, :]
 
     return [sample], [mask], [city]
 
