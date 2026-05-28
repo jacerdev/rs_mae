@@ -47,7 +47,7 @@ class CurriculumMasker(nn.Module, Masker):
         else: # Hard phase: saliency weight = 0 -> max_w
             alpha = ((gamma - self.hard_start) / (1.0 - self.hard_start)) * self.max_w
             if self.mixed_batch:
-                sigma = 0.5 * alpha
+                sigma = 0.25 * alpha
                 
                 # sample from half-normal (mean=alpha, with values only lower than alpha)
                 z = torch.randn(saliency.shape[0], 1, device=saliency.device)

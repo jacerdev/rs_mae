@@ -53,6 +53,10 @@ while [[ $# -gt 0 && "$1" != *=* ]]; do
 done
 overrides="$@"
 
+# Force temporary files to be created on the scratch drive to prevent cross-device link errors
+export TMPDIR="/scratch/jacer/outputs/tmp"
+mkdir -p $TMPDIR
+
 # Loop over experiments with a 2-step jump for parallel pretraining
 for ((i=0; i<${#experiments[@]}; i+=2)); do
     exp1=${experiments[$i]}

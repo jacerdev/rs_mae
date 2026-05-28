@@ -1,0 +1,14 @@
+Class,Baseline,Latent Target,Hog Weighted,Feat Guided,Curriculum Ndi Mixed W08,Curriculum Ndi W08,Curriculum Ndi W10,Curriculum Ndi Mixed W10
+Surface water,48.95,41.73,48.14,45.10,50.41,50.38,50.76,50.67
+Street,4.05,1.56,2.92,5.40,3.82,2.99,3.36,4.64
+Urban Fabric,73.22,71.11,73.62,74.07,72.92,73.46,72.68,73.40
+"Industrial, commercial and transport",52.93,54.22,53.52,55.01,52.73,51.30,51.97,53.35
+"Mine, dump, and construction sites",22.74,10.22,20.72,18.28,21.73,20.76,19.09,22.75
+"Artificial, vegetated areas",33.18,33.24,35.01,30.75,32.61,32.09,31.88,32.24
+Arable Land,65.14,62.67,65.88,69.56,64.62,65.04,63.36,65.32
+Permanent Crops,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+Pastures,23.08,32.04,23.86,34.45,24.31,23.02,24.39,23.81
+Forests,77.36,73.71,77.73,76.47,77.64,76.04,76.49,76.39
+Shrub,0.02,0.00,0.10,0.34,0.15,0.36,0.40,0.14
+Open spaces with no vegetation,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+Inland wetlands,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
