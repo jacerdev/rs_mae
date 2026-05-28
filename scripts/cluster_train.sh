@@ -2,7 +2,7 @@
 #SBATCH --job-name=rs_mae_train
 
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=200G
+#SBATCH --mem=80G
 #SBATCH --cpus-per-gpu=26
 #SBATCH --partition=gpu_short
 #SBATCH --time=0-14:00:00
@@ -79,7 +79,7 @@ for ((i=0; i<${#experiments[@]}; i+=2)); do
 done
 
 
-datasets=("reben_7k" "c2seg" "cashew_plantation" "mmhunan")
+datasets=("reben_7k" "c2seg_beijing" "c2seg_augsburg" "mmhunan" "cashew_plantation")
 
 # Loop over datasets with a 2-step jump for parallel finetuning
 for experiment in "${experiments[@]}"; do
