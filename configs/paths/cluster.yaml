@@ -3,6 +3,7 @@ prefix: "/scratch/jacer"
 reben_dir:             "${paths.prefix}/datasets/reben/BigEarthNet-S2_lmdb/"
 reben_keys:            "${paths.prefix}/datasets/reben/keys.pkl"
 
+reben_7k_dir:          "${paths.prefix}/datasets/reben/reben_7k/"
 sen1floods11_dir:      "${paths.prefix}/datasets/sen1floods11/"
 cashew_plantation_dir: "${paths.prefix}/datasets/cashew_plantation/"
 c2seg_dir:             "${paths.prefix}/datasets/c2seg/"

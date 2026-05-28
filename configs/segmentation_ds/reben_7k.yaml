@@ -7,8 +7,8 @@ num_bands: 10
 
 # Data
 dataset:
-  data_dir: ${paths.reben_dir}
-  keys_path: ${paths.reben_keys}
+  data_dir: ${paths.reben_7k_dir}
+  keys_path: null
   split_file: "datasets/splits/reben_7k.csv"
   align_size: 120
   bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]

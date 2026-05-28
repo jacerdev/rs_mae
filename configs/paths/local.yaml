@@ -2,6 +2,7 @@ reben_dir:             "/mnt/ssd/datasets/reben/BigEarthNet-S2-1%_lmdb/"
 #reben_dir:             "/mnt/ssd/datasets/reben/reben_7k/"
 reben_keys:            null
 
+reben_7k_dir:          "/mnt/ssd/datasets/reben/reben_7k/"
 sen1floods11_dir:      "/mnt/ssd/datasets/sen1floods11/"
 cashew_plantation_dir: "/mnt/ssd/datasets/cashew_plantation/"
 c2seg_dir:             "/mnt/ssd/datasets/c2seg/"

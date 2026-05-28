@@ -9,6 +9,13 @@ import torch
 from torch.utils.data import Dataset
 
 
+def decompress_bytes(data) -> bytes:
+    if data[:2] == b'\x1f\x8b':
+        import gzip
+        return gzip.decompress(data)
+    return data
+
+
 class ReBENDataset(Dataset):
     # https://git.tu-berlin.de/rsim/fl-lrp/-/blob/main/utils/BENv2_utils.py
     BAND_STATS = { # Z-score normalization
@@ -214,7 +221,7 @@ class ReBENDataset(Dataset):
         key_str = self.keys[idx]
         with self.env.begin(write=False) as txn:
             byte_data = txn.get(key_str.encode('ascii'))
-            tensor_dict = load_safetensors(byte_data)
+            tensor_dict = load_safetensors(decompress_bytes(byte_data))
         
         # build image stack
         band_tensors = []
@@ -233,7 +240,7 @@ class ReBENDataset(Dataset):
             with self.env.begin(write=False) as txn:
                 mask_bytes = txn.get(mask_key.encode('ascii'))
                 if mask_bytes is None: raise ValueError(f"Mask missing for {key_str}")
-                mask = load_safetensors(mask_bytes)["Data"].long().squeeze()
+                mask = load_safetensors(decompress_bytes(mask_bytes))["Data"].long().squeeze()
 
             # map to LULC Classes and align resolution
             mask = self.lut[mask]
