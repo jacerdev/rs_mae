@@ -9,7 +9,6 @@ defaults:
 
 experiment_name: "baseline"
 runs_json: "runs.json"
-results_dir: "results"
 
 # Training hyperparameters
 accumulate_grad_batches: 1

@@ -1,6 +1,6 @@
 prefix: "/scratch/jacer"
 
-reben_dir:             "${paths.prefix}/datasets/reben/BigEarthNet-S2_lmdb/"
+reben_dir:             "${paths.prefix}/datasets/reben/BigEarthNet-S2_compressed_lmdb/"
 reben_keys:            "${paths.prefix}/datasets/reben/keys.pkl"
 
 reben_7k_dir:          "${paths.prefix}/datasets/reben/reben_7k/"

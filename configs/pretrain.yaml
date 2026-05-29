@@ -27,7 +27,7 @@ precision: "bf16-mixed"
 
 # Hardware
 num_workers: 12
-prefetch_factor: 4
+prefetch_factor: 3
 
 ### Logging ###
 wandb:

@@ -9,13 +9,6 @@ import torch
 from torch.utils.data import Dataset
 
 
-def decompress_bytes(data) -> bytes:
-    if data[:2] == b'\x1f\x8b':
-        import gzip
-        return gzip.decompress(data)
-    return data
-
-
 class ReBENDataset(Dataset):
     # https://git.tu-berlin.de/rsim/fl-lrp/-/blob/main/utils/BENv2_utils.py
     BAND_STATS = { # Z-score normalization
@@ -286,4 +279,8 @@ def _apply_fractional_split(target_keys : set, source_keys : set, frac, seed=42)
 
     return target_keys.union(transferred_keys), remaining_source_keys
             
-
+def decompress_bytes(data) -> bytes:
+    if data[:2] == b'\x1f\x8b':
+        import gzip
+        return gzip.decompress(data)
+    return data

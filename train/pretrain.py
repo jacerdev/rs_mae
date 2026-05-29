@@ -57,6 +57,8 @@ def main(cfg: DictConfig):
             target_kwargs = {"embed_dim": cfg.model.embed_dim}
         case "segmentation_target":
             cfg.dataset["return_mask"] = "clc"
+        case "glcm_loss":
+            pass
         case _:
             raise ValueError("Experiment not recognized.")
 
@@ -93,10 +95,8 @@ def main(cfg: DictConfig):
         bands=cfg.bands)
 
     # Callbacks
-    monitor, save_top_k = "val_loss", 2
-    if cfg.get("use_last_ckpt", False): monitor, save_top_k = None, 1
-
-    checkpoint_callback = ModelCheckpoint(monitor=monitor, mode="min", save_last=True, save_top_k=save_top_k,
+    # checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_last=True, save_top_k=1,
+    checkpoint_callback = ModelCheckpoint(monitor=None, mode="min", save_last=True, save_top_k=1,
                                         filename="mae-{epoch:02d}-{val_loss:.4f}")
     lr_monitor = LearningRateMonitor(logging_interval='step')
 

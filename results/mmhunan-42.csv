@@ -1,8 +1,0 @@
-Class,Baseline,Latent Target,Hog Weighted,Feat Guided,Curriculum Ndi W08,Curriculum Ndi Mixed W08,Curriculum Ndi Mixed W10,Curriculum Ndi W10
-Cropland,76.36,74.84,77.29,76.90,77.19,77.11,76.80,77.00
-Forest,87.18,87.60,87.52,87.93,87.26,87.20,87.07,87.19
-Grassland,24.20,25.30,26.49,26.73,26.65,24.55,23.36,23.85
-Wetland,32.13,22.71,36.12,40.92,38.18,36.45,36.72,39.74
-Water,86.32,85.71,87.52,87.05,86.82,86.44,86.28,87.32
-Unused land,39.37,34.34,39.84,41.85,39.83,38.97,37.60,40.00
-Built-up area,75.73,73.97,75.90,75.81,75.73,75.81,75.81,75.78

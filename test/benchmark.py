@@ -32,7 +32,7 @@ class EvaluationDataset(torch.utils.data.Dataset):
         return self.ds.ids[idx], img, mask
 
 
-def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
+def run_benchmark(cfg: DictConfig, ckpt_path: str = None, results_dir="log_results"):
     if ckpt_path is None: # Offline run (local pc)
         batch_size = 16
         num_workers = 2
@@ -190,9 +190,9 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None):
         split_suffix = f'_{split_name}' if split_name != 'test' else ''
         display_dataset_name = (cfg.dataset_name + split_suffix).replace("_", " ").title().strip()
         log_results(results, display_dataset_name, cfg.experiment_name,
-                    csv_path=f"{cfg.results_dir}{dummy}/benchmark_results-{cfg.seed}.csv")
+                    csv_path=f"{results_dir}{dummy}/benchmark_results-{cfg.seed}.csv")
         log_per_class_results(per_class_results, cfg.experiment_name,
-                              csv_path=f"{cfg.results_dir}{dummy}/{cfg.dataset_name}{split_suffix}-{cfg.seed}.csv")
+                              csv_path=f"{results_dir}{dummy}/{cfg.dataset_name}{split_suffix}-{cfg.seed}.csv")
 
         # return all results
         split_prefix = f'{split_name}_' if split_name != 'test' else ''

@@ -106,10 +106,15 @@ def main(cfg: DictConfig):
 
     # Callbacks
     lr_monitor = LearningRateMonitor(logging_interval='step')
-    checkpoint_callback = ModelCheckpoint(monitor="val_iou", mode="max", save_last=True, save_top_k=3,
+    # Tracks the peaks (val_iou)
+    best_checkpoint_callback = ModelCheckpoint(monitor="val_iou", mode="max", save_last=False, save_top_k=2,
                                           filename="seg-{epoch:02d}-{val_iou:.4f}")
+    # Tracks the true fully annealed end state
+    annealed_checkpoint_callback = ModelCheckpoint(monitor="epoch", mode="max", save_last=False, save_top_k=1,
+                                                   filename="fully_annealed")
+                                                   
     early_stopping = EarlyStopping(monitor="val_iou", mode="max", patience=cfg.early_stop_patience)
-    callbacks = [checkpoint_callback, lr_monitor, early_stopping, TrainingStateCallback()]
+    callbacks = [best_checkpoint_callback, annealed_checkpoint_callback, lr_monitor, early_stopping, TrainingStateCallback()]
     if Path("/content/drive/My Drive").exists():
         from train.callbacks import CheckpointSyncCallback
         checkpoints_dir = Path(cfg.wandb.outdir) / cfg.wandb.project
@@ -167,14 +172,21 @@ def main(cfg: DictConfig):
         L.seed_everything(cfg.seed, workers=True)
         trainer.fit(model, datamodule=data_module, ckpt_path=resume_path)
         
-        # Benchmarking
-        best_ckpt_path = checkpoint_callback.best_model_path
-        results = run_benchmark(cfg, ckpt_path=best_ckpt_path)
-        #wandb.log({f"test/{k}": v for k, v in results.items()})
-
+        # Benchmarking Peak Checkpoint
+        best_ckpt_path = best_checkpoint_callback.best_model_path
+        logging.info(f"Benchmarking BEST checkpoint: {best_ckpt_path}")
+        results = run_benchmark(cfg, ckpt_path=best_ckpt_path, results_dir="results_best")
         table = wandb.Table(columns=["Metric", "Value"])
         for k, v in results.items(): table.add_data(k, v)
-        wandb.log({"test/results_table": table})
+        wandb.log({"test_best/results_table": table})
+
+        # Benchmarking Fully Annealed Checkpoint
+        annealed_ckpt_path = annealed_checkpoint_callback.best_model_path
+        logging.info(f"Benchmarking FULLY ANNEALED checkpoint: {annealed_ckpt_path}")
+        results_last = run_benchmark(cfg, ckpt_path=annealed_ckpt_path, results_dir="results_last")
+        table_last = wandb.Table(columns=["Metric", "Value"])
+        for k, v in results_last.items(): table_last.add_data(k, v)
+        wandb.log({"test_last/results_table": table_last})
 
         exit_code = 0
     finally:

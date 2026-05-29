@@ -6,6 +6,7 @@
 #SBATCH --cpus-per-gpu=26
 #SBATCH --partition=gpu_short
 #SBATCH --time=0-14:00:00
+#SBATCH --nodelist=gpu026
 
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=aloui@campus.tu-berlin.de
@@ -79,26 +80,26 @@ for ((i=0; i<${#experiments[@]}; i+=2)); do
 done
 
 
-datasets=("reben_7k" "c2seg_beijing" "c2seg_augsburg" "mmhunan" "cashew_plantation")
+datasets=("reben_7k" "c2seg_beijing" "cashew_plantation" "c2seg_augsburg" "mmhunan")
 
 # Loop over datasets with a 2-step jump for parallel finetuning
-for experiment in "${experiments[@]}"; do
-    for ((i=0; i<${#datasets[@]}; i+=2)); do
-        ds1=${datasets[$i]}
-        ds2=${datasets[$i+1]}
+for dataset in "${datasets[@]}"; do
+    for ((i=0; i<${#experiments[@]}; i+=2)); do
+        exp1=${experiments[$i]}
+        exp2=${experiments[$i+1]}
 
         echo "=================================================="
-        send_telegram "🚀 Finetuning $experiment: $ds1 & $ds2"
+        send_telegram "🚀 Finetuning $dataset: $exp1 & $exp2"
         echo "=================================================="
 
         python -m train.finetune \
-            experiment_name="$experiment" segmentation_ds="$ds1" $overrides &
+            experiment_name="$exp1" segmentation_ds="$dataset" $overrides &
         pid1=$!
 
         pid2=""
-        if [ ! -z "$ds2" ]; then # run 2nd dataset in parallel if exists
+        if [ ! -z "$exp2" ]; then
             python -m train.finetune \
-                experiment_name="$experiment" segmentation_ds="$ds2" $overrides &
+                experiment_name="$exp2" segmentation_ds="$dataset" $overrides &
             pid2=$!
         fi
 
