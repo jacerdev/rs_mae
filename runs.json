@@ -7,6 +7,26 @@
         "sen1floods11": {
             "run_name": "baseline-sen1floods11-05.23_03:58",
             "run_id": "iahnkoe1"
+        },
+        "c2seg_augsburg": {
+            "run_name": "baseline-c2seg_augsburg-05.29_06:21",
+            "run_id": "nemr4k2j"
+        },
+        "mmhunan": {
+            "run_name": "baseline-mmhunan-05.29_06:36",
+            "run_id": "xfvtna9a"
+        },
+        "cashew_plantation": {
+            "run_name": "baseline-cashew_plantation-05.29_07:25",
+            "run_id": "zodx8au6"
+        },
+        "reben_7k": {
+            "run_name": "baseline-reben_7k-05.29_09:58",
+            "run_id": "v5a79398"
+        },
+        "c2seg_beijing": {
+            "run_name": "baseline-c2seg_beijing-05.29_13:07",
+            "run_id": "hmldjs5y"
         }
     },
     "latent_target-42": {
@@ -17,6 +37,26 @@
         "sen1floods11": {
             "run_name": "latent_target-sen1floods11-05.22_12:30",
             "run_id": "d0njynl2"
+        },
+        "c2seg_augsburg": {
+            "run_name": "latent_target-c2seg_augsburg-05.29_06:21",
+            "run_id": "mukxh334"
+        },
+        "mmhunan": {
+            "run_name": "latent_target-mmhunan-05.29_06:36",
+            "run_id": "2xaiy73u"
+        },
+        "cashew_plantation": {
+            "run_name": "latent_target-cashew_plantation-05.29_07:25",
+            "run_id": "yhummgoe"
+        },
+        "reben_7k": {
+            "run_name": "latent_target-reben_7k-05.29_09:58",
+            "run_id": "duhidnk7"
+        },
+        "c2seg_beijing": {
+            "run_name": "latent_target-c2seg_beijing-05.29_13:07",
+            "run_id": "yunqucm6"
         }
     },
     "feat_guided-42": {
@@ -27,6 +67,26 @@
         "sen1floods11": {
             "run_name": "feat_guided-sen1floods11-05.26_00:08",
             "run_id": "uogv9anl"
+        },
+        "c2seg_augsburg": {
+            "run_name": "feat_guided-c2seg_augsburg-05.29_06:26",
+            "run_id": "olajzzm9"
+        },
+        "mmhunan": {
+            "run_name": "feat_guided-mmhunan-05.29_06:53",
+            "run_id": "f84g53y0"
+        },
+        "cashew_plantation": {
+            "run_name": "feat_guided-cashew_plantation-05.29_08:16",
+            "run_id": "1ntsljew"
+        },
+        "reben_7k": {
+            "run_name": "feat_guided-reben_7k-05.29_11:01",
+            "run_id": "ujn8i720"
+        },
+        "c2seg_beijing": {
+            "run_name": "feat_guided-c2seg_beijing-05.29_14:12",
+            "run_id": "7hodehjw"
         }
     },
     "hog_weighted-42": {
@@ -37,6 +97,26 @@
         "sen1floods11": {
             "run_name": "hog_weighted-sen1floods11-05.26_02:08",
             "run_id": "vl45zkdy"
+        },
+        "c2seg_augsburg": {
+            "run_name": "hog_weighted-c2seg_augsburg-05.29_06:26",
+            "run_id": "zt2ow049"
+        },
+        "mmhunan": {
+            "run_name": "hog_weighted-mmhunan-05.29_06:53",
+            "run_id": "vxjc7lnv"
+        },
+        "cashew_plantation": {
+            "run_name": "hog_weighted-cashew_plantation-05.29_08:16",
+            "run_id": "8f7a3btn"
+        },
+        "reben_7k": {
+            "run_name": "hog_weighted-reben_7k-05.29_11:01",
+            "run_id": "h0itq7rm"
+        },
+        "c2seg_beijing": {
+            "run_name": "hog_weighted-c2seg_beijing-05.29_14:12",
+            "run_id": "5bi9a2f5"
         }
     },
     "curriculum_ndi-42": {
@@ -47,6 +127,26 @@
         "sen1floods11": {
             "run_name": "curriculum_ndi-sen1floods11-05.27_01:13",
             "run_id": "fmn9gnup"
+        },
+        "c2seg_augsburg": {
+            "run_name": "curriculum_ndi-c2seg_augsburg-05.29_06:31",
+            "run_id": "0ft2b5gj"
+        },
+        "mmhunan": {
+            "run_name": "curriculum_ndi-mmhunan-05.29_07:09",
+            "run_id": "5p5rleb9"
+        },
+        "cashew_plantation": {
+            "run_name": "curriculum_ndi-cashew_plantation-05.29_09:07",
+            "run_id": "fss3k0rt"
+        },
+        "reben_7k": {
+            "run_name": "curriculum_ndi-reben_7k-05.29_12:04",
+            "run_id": "5phbw5d9"
+        },
+        "c2seg_beijing": {
+            "run_name": "curriculum_ndi-c2seg_beijing-05.29_15:18",
+            "run_id": "a93kqc0d"
         }
     },
     "curriculum_ndi_sigmae-42": {
@@ -57,6 +157,26 @@
         "sen1floods11": {
             "run_name": "curriculum_ndi_sigmae-sen1floods11-05.27_03:12",
             "run_id": "515dafew"
+        },
+        "c2seg_augsburg": {
+            "run_name": "curriculum_ndi_sigmae-c2seg_augsburg-05.29_06:31",
+            "run_id": "1ylpw3fr"
+        },
+        "mmhunan": {
+            "run_name": "curriculum_ndi_sigmae-mmhunan-05.29_07:09",
+            "run_id": "nfbsd46k"
+        },
+        "cashew_plantation": {
+            "run_name": "curriculum_ndi_sigmae-cashew_plantation-05.29_09:07",
+            "run_id": "wrnshkov"
+        },
+        "reben_7k": {
+            "run_name": "curriculum_ndi_sigmae-reben_7k-05.29_12:04",
+            "run_id": "kmc4zry1"
+        },
+        "c2seg_beijing": {
+            "run_name": "curriculum_ndi_sigmae-c2seg_beijing-05.29_15:18",
+            "run_id": "q04b7vaj"
         }
     }
 }

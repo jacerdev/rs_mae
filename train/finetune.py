@@ -10,6 +10,7 @@ from lightning.pytorch.plugins.io import AsyncCheckpointIO
 import logging
 from omegaconf import DictConfig
 from pathlib import Path
+import re
 import torch
 import wandb
 
@@ -107,7 +108,7 @@ def main(cfg: DictConfig):
     # Callbacks
     lr_monitor = LearningRateMonitor(logging_interval='step')
     # Tracks the peaks (val_iou)
-    best_checkpoint_callback = ModelCheckpoint(monitor="val_iou", mode="max", save_last=False, save_top_k=2,
+    best_checkpoint_callback = ModelCheckpoint(monitor="val_iou", mode="max", save_last=False, save_top_k=1,
                                           filename="seg-{epoch:02d}-{val_iou:.4f}")
     # Tracks the true fully annealed end state
     annealed_checkpoint_callback = ModelCheckpoint(monitor="epoch", mode="max", save_last=False, save_top_k=1,
@@ -177,16 +178,20 @@ def main(cfg: DictConfig):
         logging.info(f"Benchmarking BEST checkpoint: {best_ckpt_path}")
         results = run_benchmark(cfg, ckpt_path=best_ckpt_path, results_dir="results_best")
         table = wandb.Table(columns=["Metric", "Value"])
+        match = re.search(r"epoch=(\d+)", best_ckpt_path)
+        best_epoch = int(match.group(1)) if match else "unknown"
+        table.add_data("Epoch", best_epoch)
         for k, v in results.items(): table.add_data(k, v)
-        wandb.log({"test_best/results_table": table})
+        wandb.log({"test/results_best": table})
 
         # Benchmarking Fully Annealed Checkpoint
         annealed_ckpt_path = annealed_checkpoint_callback.best_model_path
         logging.info(f"Benchmarking FULLY ANNEALED checkpoint: {annealed_ckpt_path}")
         results_last = run_benchmark(cfg, ckpt_path=annealed_ckpt_path, results_dir="results_last")
         table_last = wandb.Table(columns=["Metric", "Value"])
+        table_last.add_data("Epoch", trainer.current_epoch - 1)
         for k, v in results_last.items(): table_last.add_data(k, v)
-        wandb.log({"test_last/results_table": table_last})
+        wandb.log({"test/results_last": table_last})
 
         exit_code = 0
     finally:

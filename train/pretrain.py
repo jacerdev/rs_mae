@@ -47,7 +47,7 @@ def main(cfg: DictConfig):
             pass
         case "feat_guided":
             pass
-        case "curriculum_ndi" | "curriculum_hog" | "curriculum_ndi_mixed_w08" | "curriculum_ndi_w08" | "curriculum_ndi_mixed_w10" | "curriculum_ndi_w10":
+        case "curriculum_ndi" | "curriculum_hog" | "curriculum_ndi_sigmae":
             masker_kwargs = {"saliency_extractor": instantiate(cfg.saliency_extractor)}
         case "fourier_loss":
             pass

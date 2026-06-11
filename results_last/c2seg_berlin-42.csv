@@ -1,0 +1,14 @@
+Class,Baseline,Latent Target,Hog Weighted,Feat Guided,Curriculum Ndi Sigmae,Curriculum Ndi
+Surface water,48.82,42.30,47.95,44.31,50.37,50.57
+Street,3.22,1.48,2.25,4.98,2.63,3.32
+Urban Fabric,73.32,71.54,74.02,74.53,73.09,73.57
+"Industrial, commercial and transport",51.71,53.82,52.72,55.22,51.75,52.64
+"Mine, dump, and construction sites",22.96,11.27,21.34,19.50,19.91,22.61
+"Artificial, vegetated areas",32.92,33.47,34.87,32.02,31.55,32.65
+Arable Land,65.77,62.44,65.56,69.50,64.56,66.07
+Permanent Crops,0.00,0.00,0.00,0.00,0.00,0.00
+Pastures,19.97,29.04,19.71,29.39,21.02,19.58
+Forests,76.37,74.55,76.89,75.60,75.60,75.64
+Shrub,0.02,0.01,0.12,0.47,0.63,0.21
+Open spaces with no vegetation,0.00,0.00,0.00,0.00,0.00,0.00
+Inland wetlands,0.00,0.00,0.00,0.00,0.00,0.00
