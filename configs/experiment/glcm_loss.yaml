@@ -1,0 +1,21 @@
+# @package _global_
+experiment_name: "glcm_loss"
+
+masker:
+  _target_: models.strategies.masker.RandomMasker
+
+target:
+  _target_: models.strategies.target.NormalizedPixelTarget
+  patch_size: ${patch_size}
+  in_chans: ${in_chans}
+
+loss:
+  _target_: models.strategies.loss.glcm.MaskedGLCMLoss
+  patch_size: ${patch_size}
+  in_chans: 10 # B02, B03, B04, B05, B06, B07, B08, B8A, B11, B12 (ReBEN 10 bands)
+  bins: 32
+  alpha: 1.0
+  beta: 100000.0
+  
+  warmup_start_epoch: 0
+  warmup_epochs: 40
