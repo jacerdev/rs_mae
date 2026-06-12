@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-gpu=26
 #SBATCH --partition=gpu_short
 #SBATCH --time=0-14:00:00
-#SBATCH --nodelist=gpu026
+########SBATCH --nodelist=gpu026
 
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=aloui@campus.tu-berlin.de

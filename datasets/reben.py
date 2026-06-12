@@ -126,7 +126,7 @@ class ReBENDataset(Dataset):
                  normalize=True, transform=None, # transform must be an albumentations.Compose
                  val_to_train_frac=0.0, test_to_train_frac=0.0, seed=42, # requires split_file
                  blocklist_path=None, # blocklist_path is a path to a csv/parquet file containing column "patch_id"
-                 return_mask=False):
+                 return_mask=False, include_unlisted=False):
         super().__init__()
 
         self.data_dir = str(data_dir)
@@ -172,6 +172,12 @@ class ReBENDataset(Dataset):
             df = (pd.read_csv(split_file, usecols=["split", "patch_id"]) if split_file.endswith(".csv") else
                   pd.read_parquet(split_file, columns=["split", "patch_id"]))
             split_keys = set(df[df['split'] == split]["patch_id"]).intersection(available_keys)
+            
+            if include_unlisted and split == "train":
+                all_listed_keys = set(df["patch_id"])
+                unlisted_keys = available_keys - all_listed_keys
+                unlisted_keys = set([k for k in unlisted_keys if not k.endswith("_reference_map")])
+                split_keys = split_keys.union(unlisted_keys)
             
             # Perform transfer from val/test set to train set if requested and valid
             if (val_to_train_frac > 0.0 or test_to_train_frac > 0.0) and split in ("train", "validation", "test"):

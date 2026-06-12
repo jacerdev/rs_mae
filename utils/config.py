@@ -20,6 +20,7 @@ class ReBENDataset_Cfg:
     blocklist_path: str
 
     return_mask: Union[bool, str] 
+    include_unlisted: bool
 
 @dataclass
 class SegmentationDataset_Cfg:
