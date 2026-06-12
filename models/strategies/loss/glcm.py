@@ -11,7 +11,7 @@ from models.strategies.loss.base import ReconstructionLoss
 class DifferentiableGLCM(nn.Module):
     """
     Differentiable Gray Level Co-occurrence Matrix (GLCM) using Kernel Density Estimation.
-    Reference: 'Focus on Texture: Rethinking Pre-training in Masked Autoencoders for Medical Image Classification'
+    Computes Omni-directional (Horizontal, Vertical, Diagonals) and Symmetric GLCM.
     """
     def __init__(self, bins=32, min_val=-3.0, max_val=3.0, bandwidth=None):
         super().__init__()
@@ -19,92 +19,107 @@ class DifferentiableGLCM(nn.Module):
         self.min_val = min_val
         self.max_val = max_val
         
-        # L is the length of bins
         self.L = (max_val - min_val) / bins
-        
-        # W is the bandwidth, controls smoothness
         self.W = bandwidth if bandwidth is not None else self.L / 2.0
         
-        # mu is the center of each bin
         centers = torch.linspace(min_val + self.L / 2, max_val - self.L / 2, bins)
         self.register_buffer("mu", centers.view(1, -1, 1)) # (1, K, 1)
 
     def _get_probabilities(self, I):
-        """
-        Computes KDE-based probabilities P for each intensity bin using a sigmoid kernel.
-        I: (B, 1, N)
-        Returns: (B, K, N)
-        """
         term1 = torch.sigmoid((I - self.mu + self.L / 2) / self.W)
         term2 = torch.sigmoid((I - self.mu - self.L / 2) / self.W)
         return term1 - term2
 
     def compute_histogram(self, I1, I2):
-        """
-        Computes the joint histogram H(I1, I2).
-        I1, I2: (B, N) flattened adjacent pixels
-        Returns: (B, K, K) differentiable GLCM matrix
-        """
         B, N = I1.shape
         if N == 0:
             return torch.zeros((B, self.bins, self.bins), device=I1.device)
             
-        I1_exp = I1.unsqueeze(1) # (B, 1, N)
-        I2_exp = I2.unsqueeze(1) # (B, 1, N)
+        I1_exp, I2_exp = I1.unsqueeze(1), I2.unsqueeze(1)
+        P1, P2 = self._get_probabilities(I1_exp), self._get_probabilities(I2_exp)
         
-        P1 = self._get_probabilities(I1_exp) # (B, K, N)
-        P2 = self._get_probabilities(I2_exp) # (B, K, N)
-        
-        # H(I1, I2) = (1/N) * P1 @ P2^T
         H = torch.bmm(P1, P2.transpose(1, 2)) / N
-        
-        # Normalize to ensure it sums to 1.0 (valid probability distribution)
         H = H / (H.sum(dim=(1, 2), keepdim=True) + 1e-8)
-        
         return H
 
-    def forward(self, x, chunk_size=1024):
+    def forward(self, x, chunk_size=512):
         """
         x: (B, H, W) spatial patches
-        Returns: Horizontal and Vertical GLCMs, each of shape (B, K, K)
+        Returns: Single Omni-directional, Symmetric GLCM of shape (B, K, K)
         """
         B, H_dim, W_dim = x.shape
         
-        # Process in chunks to prevent OOM on large batches
         if B > chunk_size:
-            H_h_list, H_v_list = [], []
+            H_list = []
             for i in range(0, B, chunk_size):
-                h, v = self.forward(x[i:i+chunk_size], chunk_size=B+1) # disable chunking for recursive call
-                H_h_list.append(h)
-                H_v_list.append(v)
-            return torch.cat(H_h_list, dim=0), torch.cat(H_v_list, dim=0)
+                chunk = x[i:i+chunk_size]
+                if chunk.requires_grad:
+                    h = checkpoint(self._forward_single_chunk, chunk, use_reentrant=False)
+                else:
+                    h = self._forward_single_chunk(chunk)
+                H_list.append(h)
+            return torch.cat(H_list, dim=0)
+        else:
+            return self._forward_single_chunk(x)
+
+    def _forward_single_chunk(self, x):
+        B, H, W = x.shape
+        K = self.bins
         
-        # Horizontal (drop last column vs drop first column)
-        I1_h = x[:, :, :-1].reshape(B, -1)
-        I2_h = x[:, :, 1:].reshape(B, -1)
-        H_h = self.compute_histogram(I1_h, I2_h)
+        # 1. Compute probabilities for the ENTIRE patch ONCE (8x speedup!)
+        # _get_probabilities is a pointwise operation, so doing it before slicing is identical
+        x_flat = x.view(B, -1).unsqueeze(1) # (B, 1, H*W)
+        P_flat = self._get_probabilities(x_flat) # (B, K, H*W)
+        P = P_flat.view(B, K, H, W)
         
-        # Vertical (drop last row vs drop first row)
-        I1_v = x[:, :-1, :].reshape(B, -1)
-        I2_v = x[:, 1:, :].reshape(B, -1)
-        H_v = self.compute_histogram(I1_v, I2_v)
+        # 2. Slice the probability map for the 4 directions and compute histograms
+        # Horizontal
+        P1_h = P[:, :, :, :-1].reshape(B, K, -1)
+        P2_h = P[:, :, :, 1:].reshape(B, K, -1)
+        H_h = torch.bmm(P1_h, P2_h.transpose(1, 2)) / max(1, P1_h.shape[-1])
         
-        return H_h, H_v
+        # Vertical
+        P1_v = P[:, :, :-1, :].reshape(B, K, -1)
+        P2_v = P[:, :, 1:, :].reshape(B, K, -1)
+        H_v = torch.bmm(P1_v, P2_v.transpose(1, 2)) / max(1, P1_v.shape[-1])
+        
+        # Diagonal 1
+        P1_d1 = P[:, :, :-1, :-1].reshape(B, K, -1)
+        P2_d1 = P[:, :, 1:, 1:].reshape(B, K, -1)
+        H_d1 = torch.bmm(P1_d1, P2_d1.transpose(1, 2)) / max(1, P1_d1.shape[-1])
+        
+        # Diagonal 2
+        P1_d2 = P[:, :, 1:, :-1].reshape(B, K, -1)
+        P2_d2 = P[:, :, :-1, 1:].reshape(B, K, -1)
+        H_d2 = torch.bmm(P1_d2, P2_d2.transpose(1, 2)) / max(1, P1_d2.shape[-1])
+        
+        # 3. Pool all directional pairs together
+        H_total = H_h + H_v + H_d1 + H_d2
+        
+        # 4. Add transpose to enforce symmetry (counts reverse directions)
+        H_sym = (H_total + H_total.transpose(1, 2)) / 2.0
+        
+        # Normalize back to 1.0 probability distribution
+        H_sym = H_sym / (H_sym.sum(dim=(1, 2), keepdim=True) + 1e-8)
+        
+        return H_sym
 
 class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
     """
-    Computes a combined GLCM and MSE loss for Masked Autoencoders.
-    Reconstructs the spatial patch and matches the statistical texture matrices.
+    Computes a combined GLCM and MSE loss for Masked Autoencoders over grouped tokens.
     """
     def __init__(self, 
+                 in_chans: int,
                  patch_size: int,
-                 in_chans: int = 4,
+                 group_tokens: int = 3,  # Adjusted default
+                 stride_tokens: int = 2, # Controls window overlap
                  bins: int = 32,
                  min_val: float = -3.0,
                  max_val: float = 3.0,
                  bandwidth: float = None,
-                 alpha: float = 1.0, # MSE weight
-                 beta: float = 1.0,  # GLCM weight
+                 chunk_size: int = 512,
+                 alpha: float = 1.0,
+                 beta: float = 1.0,
                  warmup_start_epoch: int = 0,
                  warmup_epochs: int = 0,
                  **kwargs):
@@ -113,6 +128,9 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         
         self.patch_size = patch_size
         self.in_chans = in_chans
+        self.group_tokens = group_tokens
+        self.stride_tokens = stride_tokens 
+        self.chunk_size = chunk_size
         self.alpha = alpha
         self.beta = beta
         self.warmup_start_epoch = warmup_start_epoch
@@ -121,21 +139,14 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         self.glcm = DifferentiableGLCM(bins=bins, min_val=min_val, max_val=max_val, bandwidth=bandwidth)
         
     def __call__(self, pred, target, mask, phase="", **kwargs):
-        """
-        pred: (B, L, D) where D = patch_size**2 * in_chans
-        target: (B, L, D)
-        mask: (B, L) where 1 indicates masked patch
-        """
         B, L, D = pred.shape
         
-        # standard pixel-wise MSE Loss
         loss_mse_full = (pred - target) ** 2
-        loss_mse_full = loss_mse_full.mean(dim=-1) # (B, L)
+        loss_mse_full = loss_mse_full.mean(dim=-1)
         loss_mse = (loss_mse_full * mask).sum() / mask.sum().clamp(min=1)
         
-        # scaling for GLCM weight
         if phase == "validation":
-            scale = 1.0 # evaluate full loss dynamically
+            scale = 1.0 
         else:
             epoch = TRAINING_STATE.epoch
             if epoch < self.warmup_start_epoch:
@@ -144,54 +155,58 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
                 if self.warmup_epochs <= 0:
                     scale = 1.0
                 else:
-                    # Cosine ramp-up for smooth gradient injection
                     progress = min(1.0, (epoch - self.warmup_start_epoch) / self.warmup_epochs)
                     scale = (1.0 - math.cos(progress * math.pi)) / 2.0
                     
         effective_beta = self.beta * scale
         
-        # Extract masked patches only for GLCM
-        mask_flat = mask.view(-1).bool()
-        pred_m = pred.reshape(-1, D)[mask_flat]   # (M, D)
-        target_m = target.reshape(-1, D)[mask_flat] # (M, D)
-        
-        M = pred_m.shape[0]
-        if M == 0 or effective_beta == 0:
+        if effective_beta == 0:
             return self.alpha * loss_mse, {"mse_loss": loss_mse.detach(), "glcm_loss": torch.tensor(0.0, device=pred.device)}
             
-        # Reshape to spatial dimensions: (M * C, p, p)
-        # We treat each channel of each patch as an independent image for GLCM
+        S = int(math.sqrt(L)) 
         p = self.patch_size
         C = self.in_chans
         
-        pred_spatial = pred_m.reshape(M * C, p, p)
-        target_spatial = target_m.reshape(M * C, p, p)
+        pred_img = pred.view(B, S, S, C, p, p).permute(0, 3, 1, 4, 2, 5).reshape(B, C, S * p, S * p)
+        target_img = target.view(B, S, S, C, p, p).permute(0, 3, 1, 4, 2, 5).reshape(B, C, S * p, S * p)
         
-        # clamp extreme values so KDE bins don't completely miss them
+        mask_grid = mask.view(B, 1, S, S).float()
+        
+        # Stride logic injected here for the token mask
+        block_mask = F.max_pool2d(mask_grid, kernel_size=self.group_tokens, stride=self.stride_tokens) > 0 
+        block_mask_flat = block_mask.view(-1)
+        
+        gp = p * self.group_tokens 
+        pixel_stride = p * self.stride_tokens # Pixel stride matches token stride
+        
+        # Stride logic injected here for the pixel windows
+        pred_blocks = F.unfold(pred_img, kernel_size=gp, stride=pixel_stride).transpose(1, 2).reshape(-1, C * gp * gp)
+        target_blocks = F.unfold(target_img, kernel_size=gp, stride=pixel_stride).transpose(1, 2).reshape(-1, C * gp * gp)
+        
+        pred_m = pred_blocks[block_mask_flat]
+        target_m = target_blocks[block_mask_flat]
+        
+        M = pred_m.shape[0]
+        if M == 0:
+            return self.alpha * loss_mse, {"mse_loss": loss_mse.detach(), "glcm_loss": torch.tensor(0.0, device=pred.device)}
+            
+        pred_spatial = pred_m.view(M * C, gp, gp)
+        target_spatial = target_m.view(M * C, gp, gp)
+        
         pred_spatial = torch.clamp(pred_spatial, self.glcm.min_val, self.glcm.max_val)
         target_spatial = torch.clamp(target_spatial, self.glcm.min_val, self.glcm.max_val)
         
-        # Compute GLCMs
-        # use gradient checkpointing to save VRAM
-        if pred_spatial.requires_grad:
-            # Checkpoint the glcm forward pass
-            H_h_pred, H_v_pred = checkpoint(self.glcm, pred_spatial, use_reentrant=False)
-        else:
-            H_h_pred, H_v_pred = self.glcm(pred_spatial)
-            
-        H_h_targ, H_v_targ = self.glcm(target_spatial)
+        H_pred = self.glcm(pred_spatial, chunk_size=self.chunk_size)
+        H_targ = self.glcm(target_spatial, chunk_size=self.chunk_size)
         
-        # Compute MSE between GLCM matrices
-        loss_glcm_h = F.mse_loss(H_h_pred, H_h_targ, reduction='mean')
-        loss_glcm_v = F.mse_loss(H_v_pred, H_v_targ, reduction='mean')
-        loss_glcm = (loss_glcm_h + loss_glcm_v) / 2.0
+        loss_glcm = F.mse_loss(H_pred, H_targ, reduction='mean')
         
-        # Total Loss
         total_loss = self.alpha * loss_mse + effective_beta * loss_glcm
         
         loss_components = {
             "mse_loss": loss_mse.detach(),
             "glcm_loss": loss_glcm.detach()
+            #"glcm_loss": (loss_glcm * effective_beta).detach()
         }
         
         return total_loss, loss_components

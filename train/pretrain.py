@@ -96,7 +96,7 @@ def main(cfg: DictConfig):
 
     # Callbacks
     # checkpoint_callback = ModelCheckpoint(monitor="val_loss", mode="min", save_last=True, save_top_k=1,
-    checkpoint_callback = ModelCheckpoint(monitor=None, mode="min", save_last=True, save_top_k=1,
+    checkpoint_callback = ModelCheckpoint(monitor="epoch", mode="max", save_last=True, save_top_k=1,
                                         filename="mae-{epoch:02d}-{val_loss:.4f}")
     lr_monitor = LearningRateMonitor(logging_interval='step')
 
