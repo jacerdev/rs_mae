@@ -178,5 +178,11 @@
             "run_name": "curriculum_ndi_sigmae-c2seg_beijing-05.29_15:18",
             "run_id": "q04b7vaj"
         }
+    },
+    "glcm_loss-42": {
+        "reben": {
+            "run_name": "glcm_loss-06.12_07:03",
+            "run_id": "c60olhbw"
+        }
     }
 }
