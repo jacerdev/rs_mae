@@ -4,7 +4,6 @@ experiment_name: "baseline_full_200ep"
 max_epochs: 200
 
 dataset:
-  keys_path: null
   blocklist_path: "datasets/splits/reben_7k_test_ood_only.csv"
   include_unlisted: true
 

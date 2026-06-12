@@ -43,7 +43,7 @@ def main(cfg: DictConfig):
     masker_kwargs, target_kwargs, loss_kwargs = {}, {}, {}
     
     match cfg.experiment_name:
-        case "baseline":
+        case "baseline" | "baseline_200ep" | "baseline_full_200ep":
             pass
         case "feat_guided":
             pass
