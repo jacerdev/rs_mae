@@ -176,7 +176,7 @@ def main(cfg: DictConfig):
         # Benchmarking Peak Checkpoint
         best_ckpt_path = best_checkpoint_callback.best_model_path
         logging.info(f"Benchmarking BEST checkpoint: {best_ckpt_path}")
-        results = run_benchmark(cfg, ckpt_path=best_ckpt_path, results_dir="results_best")
+        results = run_benchmark(cfg, ckpt_path=best_ckpt_path, results_dir="results/results_best")
         table = wandb.Table(columns=["Metric", "Value"])
         match = re.search(r"epoch=(\d+)", best_ckpt_path)
         best_epoch = int(match.group(1)) if match else "unknown"
@@ -187,7 +187,7 @@ def main(cfg: DictConfig):
         # Benchmarking Fully Annealed Checkpoint
         annealed_ckpt_path = annealed_checkpoint_callback.best_model_path
         logging.info(f"Benchmarking FULLY ANNEALED checkpoint: {annealed_ckpt_path}")
-        results_last = run_benchmark(cfg, ckpt_path=annealed_ckpt_path, results_dir="results_last")
+        results_last = run_benchmark(cfg, ckpt_path=annealed_ckpt_path, results_dir="results/results_last")
         table_last = wandb.Table(columns=["Metric", "Value"])
         table_last.add_data("Epoch", trainer.current_epoch - 1)
         for k, v in results_last.items(): table_last.add_data(k, v)

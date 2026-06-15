@@ -1,7 +1,0 @@
-Class,Baseline,Latent Target,Hog Weighted,Feat Guided,Curriculum Ndi Sigmae,Curriculum Ndi
-Well-managed plantation,51.55,36.96,53.70,54.33,54.23,54.35
-Poorly-managed plantation,72.73,66.24,72.77,72.28,73.78,73.16
-Non-plantation,61.47,51.52,62.30,59.68,62.86,60.93
-Residential,87.75,80.03,88.17,86.38,87.37,87.97
-Background_cashew,79.16,75.68,79.31,78.67,79.42,79.16
-Uncertain,2.65,0.55,11.63,7.21,10.61,13.89

@@ -1,8 +1,0 @@
-Class,Baseline,Latent Target,Feat Guided,Hog Weighted,Curriculum Ndi Sigmae,Curriculum Ndi
-Cropland,76.36,74.84,76.90,77.29,77.01,76.79
-Forest,87.18,87.60,87.92,87.53,87.19,87.07
-Grassland,24.21,25.27,26.74,26.48,23.84,23.36
-Wetland,32.12,22.68,40.91,36.15,39.76,36.70
-Water,86.31,85.72,87.05,87.53,87.32,86.28
-Unused land,39.39,34.36,41.84,39.84,40.04,37.58
-Built-up area,75.73,73.97,75.81,75.91,75.78,75.81

@@ -119,7 +119,6 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
                  bandwidth: float = None,
                  chunk_size: int = 512,
                  alpha: float = 1.0,
-                 beta: float = 1.0,
                  warmup_start_epoch: int = 0,
                  warmup_epochs: int = 0,
                  **kwargs):
@@ -132,7 +131,6 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         self.stride_tokens = stride_tokens 
         self.chunk_size = chunk_size
         self.alpha = alpha
-        self.beta = beta
         self.warmup_start_epoch = warmup_start_epoch
         self.warmup_epochs = warmup_epochs
         
@@ -158,10 +156,10 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
                     progress = min(1.0, (epoch - self.warmup_start_epoch) / self.warmup_epochs)
                     scale = (1.0 - math.cos(progress * math.pi)) / 2.0
                     
-        effective_beta = self.beta * scale
+        effective_alpha = self.alpha * scale
         
-        if effective_beta == 0:
-            return self.alpha * loss_mse, {"mse_loss": loss_mse.detach(), "glcm_loss": torch.tensor(0.0, device=pred.device)}
+        if effective_alpha == 0:
+            return loss_mse, {"mse_loss": loss_mse.detach(), "glcm_loss": torch.tensor(0.0, device=pred.device)}
             
         S = int(math.sqrt(L)) 
         p = self.patch_size
@@ -188,7 +186,7 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         
         M = pred_m.shape[0]
         if M == 0:
-            return self.alpha * loss_mse, {"mse_loss": loss_mse.detach(), "glcm_loss": torch.tensor(0.0, device=pred.device)}
+            return loss_mse, {"mse_loss": loss_mse.detach(), "glcm_loss": torch.tensor(0.0, device=pred.device)}
             
         pred_spatial = pred_m.view(M * C, gp, gp)
         target_spatial = target_m.view(M * C, gp, gp)
@@ -201,12 +199,47 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         
         loss_glcm = F.mse_loss(H_pred, H_targ, reduction='mean')
         
-        total_loss = self.alpha * loss_mse + effective_beta * loss_glcm
+        total_loss = loss_mse + effective_alpha * loss_glcm
         
         loss_components = {
             "mse_loss": loss_mse.detach(),
             "glcm_loss": loss_glcm.detach()
-            #"glcm_loss": (loss_glcm * effective_beta).detach()
+            #"glcm_loss": (loss_glcm * effective_alpha).detach()
         }
         
         return total_loss, loss_components
+
+    def get_texture_error_map(self, pred_img, target_img):
+        """Computes the spatial GLCM MSE error map between pred and target for 16x16 non-overlapping windows."""
+        B, C, H, W = pred_img.shape
+        gp = self.group_tokens * self.patch_size # usually 16
+        
+        # Extract non-overlapping 16x16 patches
+        # (B, C, H, W) -> unfold -> (B, C, num_windows_h, num_windows_w, gp, gp)
+        num_windows_h = H // gp
+        num_windows_w = W // gp
+        
+        pred_blocks = pred_img.unfold(2, gp, gp).unfold(3, gp, gp).reshape(-1, gp, gp)
+        target_blocks = target_img.unfold(2, gp, gp).unfold(3, gp, gp).reshape(-1, gp, gp)
+        
+        pred_blocks = torch.clamp(pred_blocks, self.glcm.min_val, self.glcm.max_val)
+        target_blocks = torch.clamp(target_blocks, self.glcm.min_val, self.glcm.max_val)
+        
+        # Compute GLCM
+        H_pred = self.glcm(pred_blocks, chunk_size=self.chunk_size)
+        H_targ = self.glcm(target_blocks, chunk_size=self.chunk_size)
+        
+        # Compute MSE per patch
+        mse = F.mse_loss(H_pred, H_targ, reduction='none')
+        mse_per_patch = mse.mean(dim=(1, 2)) # mean over K, K bins
+        
+        # Reshape to spatial grid
+        mse_grid = mse_per_patch.view(B, C, num_windows_h, num_windows_w)
+        
+        # Average over channels to get one error scalar per window
+        error_map = mse_grid.mean(dim=1) # (B, num_windows_h, num_windows_w)
+        
+        # Interpolate up to full image size (B, H, W)
+        error_map = F.interpolate(error_map.unsqueeze(1), size=(H, W), mode='nearest').squeeze(1)
+        
+        return error_map

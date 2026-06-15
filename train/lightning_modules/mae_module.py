@@ -154,6 +154,7 @@ class MAEModule(L.LightningModule):
         for name, bands_idx in band_indices.items():
             is_curriculum_masker = hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker"
             is_weighted_loss = hasattr(self.model, "loss") and type(self.model.loss).__name__ == "SaliencyWeightedLoss"
+            is_glcm_loss = hasattr(self.model, "loss") and type(self.model.loss).__name__ == "MaskedGLCMLoss"
             
             if is_curriculum_masker or is_weighted_loss:
                 extractor = self.model.masker.saliency_extractor if is_curriculum_masker else self.model.loss.saliency_extractor
@@ -166,6 +167,18 @@ class MAEModule(L.LightningModule):
                 rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
                         torch.stack(saliency_grid_tensors).to(imgs.device), # saliency grid
                         quant_norm(imgs[:, bands_idx, :, :])] # unmasked input
+            elif is_glcm_loss:
+                error_map = self.model.loss.get_texture_error_map(recon_raw[:, bands_idx, :, :], target[:, bands_idx, :, :]).detach()
+                error_grid_tensors = []
+                for i in range(num_samples):
+                    em = error_map[i]
+                    em_norm = (em - em.min()) / (em.max() - em.min() + 1e-8)
+                    e_overlay = generate_saliency_grid(em_norm, image=quant_norm(imgs[i:i+1, bands_idx, :, :])[0].permute(1, 2, 0).cpu().numpy())
+                    error_grid_tensors.append(torch.from_numpy(e_overlay).float().permute(2, 0, 1) / 255.0)
+
+                rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
+                        quant_norm(imgs[:, bands_idx, :, :]), # unmasked input
+                        torch.stack(error_grid_tensors).to(imgs.device)] # GLCM error overlay
             else:
                 rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
                         quant_norm(imgs[:, bands_idx, :, :]), # unmasked input
