@@ -95,9 +95,9 @@ class MAEModule(L.LightningModule):
     def _log_reconstructions(self, outputs, split):
         from models.strategies.target import HOGNDITarget
         from models.strategies.target.segmentation import SegmentationTarget
-        if isinstance(self.model.target, HOGNDITarget):
+        if hasattr(self.model, "target") and type(self.model.target).__name__ == "HOGNDITarget":
             self._log_hog_ndi_reconstructions(outputs, split)
-        elif isinstance(self.model.target, SegmentationTarget):
+        elif hasattr(self.model, "target") and type(self.model.target).__name__ == "SegmentationTarget":
             self._log_segmentation_reconstructions(outputs, split)
         else:
             self._log_pixel_reconstructions(outputs, split)
