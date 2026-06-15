@@ -49,10 +49,24 @@ class DifferentiableGLCM(nn.Module):
         """
         B, H_dim, W_dim = x.shape
         
-        if B > chunk_size:
+        if str(chunk_size).lower() == 'auto' or chunk_size == -1:
+            if x.device.type == 'cuda':
+                free_memory, _ = torch.cuda.mem_get_info(x.device)
+                # Memory overhead calculation:
+                # Even though a single 16x16 patch is tiny (~1 KB), computing its GLCM graph 
+                # requires saving intermediate probability maps (K=16 bins) and directional 
+                # slices for backpropagation. This expands the memory footprint to ~162 KB per patch.
+                # We reserve a safe 80% of available VRAM to determine the max chunk size.
+                dynamic_chunk_size = int((free_memory * 0.8) / (162 * 1024))
+                # Ensure it's at least a reasonable minimum, and not larger than B
+                chunk_size = max(1024, min(B, dynamic_chunk_size))
+            else:
+                chunk_size = 32768
+                
+        if isinstance(chunk_size, (int, float)) and chunk_size > 0 and B > chunk_size:
             H_list = []
-            for i in range(0, B, chunk_size):
-                chunk = x[i:i+chunk_size]
+            for i in range(0, B, int(chunk_size)):
+                chunk = x[i:i+int(chunk_size)]
                 if chunk.requires_grad:
                     h = checkpoint(self._forward_single_chunk, chunk, use_reentrant=False)
                 else:
@@ -117,7 +131,7 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
                  min_val: float = -3.0,
                  max_val: float = 3.0,
                  bandwidth: float = None,
-                 chunk_size: int = 512,
+                 chunk_size = 'auto',
                  alpha: float = 1.0,
                  warmup_start_epoch: int = 0,
                  warmup_epochs: int = 0,
