@@ -1,20 +1,20 @@
-Class,Baseline,Latent Target,Feat Guided,Hog Weighted,Curriculum Ndi Sigmae,Curriculum Ndi,Baseline 200Ep,Baseline Full 200Ep,Segmentation Target
-Urban fabric,72.60,71.59,74.42,72.88,72.80,71.19,74.46,72.94,75.79
-Industrial or commercial units,52.38,46.21,55.33,47.90,52.27,53.98,55.97,53.63,52.82
-Arable land,69.50,69.06,70.82,68.35,66.62,70.20,69.53,70.76,76.26
-Permanent crops,52.48,43.85,50.41,55.17,56.12,49.92,52.54,48.95,66.24
-Pastures,37.37,35.14,37.61,38.09,36.06,38.47,38.84,40.32,47.80
-Complex cultivation patterns,31.17,29.92,33.26,33.02,33.40,30.94,34.23,32.95,36.92
-"Land principally occupied by agriculture, with significant areas of natural vegetation",35.34,35.08,38.43,37.92,36.58,35.73,34.38,39.11,45.06
-Agro-forestry areas,61.03,59.86,63.40,60.59,58.62,60.69,65.13,62.34,67.10
-Broad-leaved forest,61.83,59.71,60.73,62.87,62.06,62.72,61.25,63.42,72.02
-Coniferous forest,66.34,65.61,68.05,69.58,68.53,66.89,70.15,66.32,72.64
-Mixed forest,57.93,57.77,57.58,53.68,53.19,56.79,57.48,57.85,65.17
-Natural grassland and sparsely vegetated areas,45.03,39.38,39.20,38.55,36.39,45.10,37.09,45.44,49.66
-"Moors, heathland and sclerophyllous vegetation",37.90,39.42,37.37,43.62,40.53,37.32,45.50,43.77,48.90
-"Transitional woodland, shrub",38.71,28.05,41.19,33.81,32.40,37.50,41.77,40.72,51.20
-"Beaches, dunes, sands",19.77,4.26,15.71,21.89,14.96,19.81,14.60,11.12,38.96
-Inland wetlands,52.04,50.49,52.49,53.23,51.68,51.58,55.03,53.84,61.74
-Coastal wetlands,53.68,49.33,51.22,48.16,50.04,50.77,54.84,55.48,59.26
-Inland waters,77.25,72.77,81.24,78.23,76.91,77.73,76.66,78.95,81.13
-Marine waters,92.18,89.56,94.93,92.02,90.82,92.45,92.39,93.45,94.47
+Class,Baseline,Latent Target,Feat Guided,Hog Weighted,Curriculum Ndi Sigmae,Curriculum Ndi,Baseline 200Ep,Baseline Full 200Ep,Segmentation Target,Curriculum Feat Unif,Glcm Loss
+Urban fabric,72.60,71.59,74.42,72.88,72.80,71.19,74.46,72.94,75.79,73.20,73.42
+Industrial or commercial units,52.38,46.21,55.33,47.90,52.27,53.98,55.97,53.63,52.82,50.76,50.12
+Arable land,69.50,69.06,70.82,68.35,66.62,70.20,69.53,70.76,76.26,71.78,68.83
+Permanent crops,52.48,43.85,50.41,55.17,56.12,49.92,52.54,48.95,66.24,52.28,49.44
+Pastures,37.37,35.14,37.61,38.09,36.06,38.47,38.84,40.32,47.80,35.80,37.46
+Complex cultivation patterns,31.17,29.92,33.26,33.02,33.40,30.94,34.23,32.95,36.92,29.92,31.30
+"Land principally occupied by agriculture, with significant areas of natural vegetation",35.34,35.08,38.43,37.92,36.58,35.73,34.38,39.11,45.06,36.47,37.40
+Agro-forestry areas,61.03,59.86,63.40,60.59,58.62,60.69,65.13,62.34,67.10,62.36,61.27
+Broad-leaved forest,61.83,59.71,60.73,62.87,62.06,62.72,61.25,63.42,72.02,62.27,59.41
+Coniferous forest,66.34,65.61,68.05,69.58,68.53,66.89,70.15,66.32,72.64,66.59,68.71
+Mixed forest,57.93,57.77,57.58,53.68,53.19,56.79,57.48,57.85,65.17,56.91,57.65
+Natural grassland and sparsely vegetated areas,45.03,39.38,39.20,38.55,36.39,45.10,37.09,45.44,49.66,36.12,37.17
+"Moors, heathland and sclerophyllous vegetation",37.90,39.42,37.37,43.62,40.53,37.32,45.50,43.77,48.90,33.36,39.42
+"Transitional woodland, shrub",38.71,28.05,41.19,33.81,32.40,37.50,41.77,40.72,51.20,38.90,37.35
+"Beaches, dunes, sands",19.77,4.26,15.71,21.89,14.96,19.81,14.60,11.12,38.96,27.98,6.00
+Inland wetlands,52.04,50.49,52.49,53.23,51.68,51.58,55.03,53.84,61.74,54.80,54.54
+Coastal wetlands,53.68,49.33,51.22,48.16,50.04,50.77,54.84,55.48,59.26,58.68,52.84
+Inland waters,77.25,72.77,81.24,78.23,76.91,77.73,76.66,78.95,81.13,79.08,77.88
+Marine waters,92.18,89.56,94.93,92.02,90.82,92.45,92.39,93.45,94.47,92.00,92.34
