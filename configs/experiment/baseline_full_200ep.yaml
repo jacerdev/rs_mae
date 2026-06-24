@@ -1,0 +1,19 @@
+# @package _global_
+experiment_name: "baseline_full_200ep"
+
+max_epochs: 200
+
+dataset:
+  blocklist_path: "datasets/splits/reben_7k_test_ood_only.csv"
+  include_unlisted: true
+
+masker:
+  _target_: models.strategies.masker.RandomMasker
+
+target:
+  _target_: models.strategies.target.NormalizedPixelTarget
+  patch_size: ${patch_size}
+  in_chans: ${in_chans}
+
+loss:
+  _target_: models.strategies.loss.MaskedMSELoss

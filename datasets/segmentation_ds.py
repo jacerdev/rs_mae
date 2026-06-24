@@ -3,18 +3,17 @@ import torch
 from torch.utils.data import Dataset
 
 from .reben import ReBENDataset
-from .data_loaders import load_reben_7k, load_burn_scars, load_sen1floods11, load_cashew_plantation, load_c2seg
+from .data_loaders import load_reben_7k, load_burn_scars, load_sen1floods11, load_cashew_plantation, load_c2seg, load_mmhunan
 
 class SegmentationDataset(Dataset):
     """stochastic grid-sampling with a translational per-epoch offset (relies on current_epoch being updated at the start of each epoch)"""
-    def __init__(self, samples, masks, grid_sampling=True, crop_size=None, min_margin=None, transform=None, normalize=False, bands=None, ids=None):
+    def __init__(self, samples, masks, grid_sampling=True, crop_size=None, transform=None, normalize=False, bands=None, ids=None):
         """
         samples (list or np.ndarray): Raw image array(s) (H, W, C).
         masks (list or np.ndarray): Raw mask array(s) (H, W).
         ids (list): List of unique identifiers for each sample.
         grid_sampling: If True, enables stochastic grid cropping, otherwise return samples as is
-        crop_size (tuple): Target crop dimensions (Height, Width).
-        min_margin: Minimum margin to allow shifting
+        crop_size (int): Target crop dimensions.
         """
         self.samples = samples
         self.masks = masks
@@ -35,12 +34,10 @@ class SegmentationDataset(Dataset):
 
         # precalculate grid coordinates and margins
         H, W = self.samples[0].shape[:2]
-        if min_margin is None:
-            max_y_crops = H // self.crop_size
-            max_x_crops = W // self.crop_size
-        else:
-            max_y_crops = (H - min_margin) // self.crop_size
-            max_x_crops = (W - min_margin) // self.crop_size
+        max_y_crops = H // self.crop_size
+        max_x_crops = W // self.crop_size
+        # max_y_crops = (H - min_margin) // self.crop_size
+        # max_x_crops = (W - min_margin) // self.crop_size
         
         self.margin_y = H - (max_y_crops * self.crop_size)
         self.margin_x = W - (max_x_crops * self.crop_size)
@@ -55,9 +52,9 @@ class SegmentationDataset(Dataset):
         # allocate shared memory for offsets so multiple workers can sample from the same grid
         self.offsets = torch.zeros((len(self.samples), 2), dtype=torch.int32).share_memory_()
         self.current_epoch = -1
-        self.set_epoch(0)
+        self.shift_grid(0)
 
-    def set_epoch(self, epoch):
+    def shift_grid(self, epoch):
         """Generates grid offset per sample (must be called by the Custom Epoch Hook before every new epoch)"""
         if not self.grid_sampling or self.current_epoch == epoch:
             return
@@ -103,7 +100,7 @@ class ReBEN7kDataset(SegmentationDataset):
     BANDS = ReBENDataset.BANDS
 
     def __init__(self, data_dir, transform=None,
-                 crop_size=112, grid_sampling=True, min_margin=None,
+                 crop_size=112, grid_sampling=True,
                  **ReBENDataset_kwargs):
         
         normalize = ReBENDataset_kwargs["normalize"]
@@ -117,7 +114,6 @@ class ReBEN7kDataset(SegmentationDataset):
             masks=masks,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
-            min_margin=min_margin,
             transform=transform,
             normalize=normalize, bands=bands,
             ids=ids
@@ -132,7 +128,7 @@ class Sen1Floods11Dataset(SegmentationDataset):
     BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
 
     def __init__(self, data_dir, split_file, split, bands=None, normalize=False, transform=None,
-                 crop_size=112, grid_sampling=True, min_margin=None):
+                 crop_size=112, grid_sampling=True):
         
         samples, masks, ids = load_sen1floods11(data_dir, split_file, split, bands)
 
@@ -141,7 +137,6 @@ class Sen1Floods11Dataset(SegmentationDataset):
             masks=masks,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
-            min_margin=min_margin,
             transform=transform,
             normalize=normalize, bands=bands,
             ids=ids
@@ -155,7 +150,7 @@ class BurnScarsDataset(SegmentationDataset):
     }
     BANDS = ["B02", "B03", "B04", "B8A", "B11", "B12"]
     def __init__(self, data_dir, split_file, split, bands=None, normalize=False, transform=None,
-                 crop_size=112, grid_sampling=True, min_margin=None):
+                 crop_size=112, grid_sampling=True):
         
         samples, masks, ids = load_burn_scars(data_dir, split_file, split, bands)
 
@@ -164,7 +159,6 @@ class BurnScarsDataset(SegmentationDataset):
             masks=masks,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
-            min_margin=min_margin,
             transform=transform,
             normalize=normalize, bands=bands,
             ids=ids
@@ -183,7 +177,7 @@ class CashewPlantationDataset(SegmentationDataset):
     }
     BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
     def __init__(self, data_dir, split_file, split, bands=None, normalize=False, transform=None,
-                 crop_size=112, grid_sampling=True, min_margin=None):
+                 crop_size=112, grid_sampling=True):
         
         samples, masks, ids = load_cashew_plantation(data_dir, split_file, split, bands)
 
@@ -192,7 +186,6 @@ class CashewPlantationDataset(SegmentationDataset):
             masks=masks,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
-            min_margin=min_margin,
             transform=transform,
             normalize=normalize, bands=bands,
             ids=ids
@@ -219,7 +212,7 @@ class C2SegDataset(SegmentationDataset):
     BANDS = ["B02", "B03", "B04", "B08"]
 
     def __init__(self, data_dir, city, split, split_frac=.8, bands=None, normalize=False, transform=None,
-                 crop_size=112, grid_sampling=True, min_margin=None):
+                 crop_size=112, grid_sampling=True):
         
         samples, masks, ids = load_c2seg(data_dir, city=city, split=split, split_frac=split_frac, key='MSI', bands=bands)
             
@@ -228,7 +221,35 @@ class C2SegDataset(SegmentationDataset):
             masks=masks,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
-            min_margin=min_margin,
+            transform=transform,
+            normalize=normalize, bands=bands,
+            ids=ids
+        )
+
+class MMHunanDataset(SegmentationDataset):
+    # https://github.com/LauraChow/HunanMultimodalDataset
+    CLASSES = {
+        -1: "Missing data",
+        0: "Cropland",
+        1: "Forest",
+        2: "Grassland",
+        3: "Wetland",
+        4: "Water",
+        5: "Unused land",
+        6: "Built-up area"
+    }
+    BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
+
+    def __init__(self, data_dir, split, bands=None, normalize=False, transform=None,
+                 crop_size=112, grid_sampling=True):
+        
+        samples, masks, ids = load_mmhunan(data_dir, split, bands)
+            
+        super().__init__(
+            samples=samples,
+            masks=masks,
+            grid_sampling=grid_sampling,
+            crop_size=crop_size,
             transform=transform,
             normalize=normalize, bands=bands,
             ids=ids

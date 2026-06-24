@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Any
+from typing import List, Any, Union
 
 # ==============================================================================
 # Datasets Configurations
@@ -19,11 +19,13 @@ class ReBENDataset_Cfg:
     seed: int
     blocklist_path: str
 
+    return_mask: Union[bool, str] 
+    include_unlisted: bool
+
 @dataclass
 class SegmentationDataset_Cfg:
     grid_sampling: bool
     crop_size: int
-    min_margin: int
 
 @dataclass
 class ReBEN7kDataset_Cfg(SegmentationDataset_Cfg):
@@ -52,6 +54,12 @@ class BurnScarsDataset_Cfg(SegmentationDataset_Cfg):
 class CashewPlantationDataset_Cfg(SegmentationDataset_Cfg):
     data_dir: str
     split_file: str
+    bands: List[str]
+    normalize: bool
+
+@dataclass
+class MMHunanDataset_Cfg(SegmentationDataset_Cfg):
+    data_dir: str
     bands: List[str]
     normalize: bool
 

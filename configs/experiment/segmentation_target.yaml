@@ -1,0 +1,13 @@
+# @package _global_
+experiment_name: "segmentation_target"
+
+masker:
+  _target_: models.strategies.masker.RandomMasker
+
+target:
+  _target_: models.strategies.target.SegmentationTarget
+  patch_size: ${patch_size}
+  num_classes: 32
+
+loss:
+  _target_: models.strategies.target.segmentation.MaskedCrossEntropyLoss

@@ -60,4 +60,10 @@ class FFTEnhancedLoss(ReconstructionLoss):
         # Total loss
         total_loss = mse_total + (curr_lambda_amp * amp_total) + (curr_lambda_phase * phase_total)
         
-        return total_loss, (mse_total, amp_total, phase_total)
+        loss_components = {
+            "mse_loss": mse_total.detach(),
+            "amp_loss": amp_total.detach(),
+            "phase_loss": phase_total.detach()
+        }
+
+        return total_loss, loss_components

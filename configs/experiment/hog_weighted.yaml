@@ -1,0 +1,24 @@
+# @package _global_
+experiment_name: "hog_weighted"
+
+masker:
+  _target_: models.strategies.masker.RandomMasker
+
+saliency_extractor:
+  _target_: utils.features.HOGSaliency
+  nbins: 9
+  pool: ${patch_size}
+  in_channels: ${in_chans}
+
+target:
+  _target_: models.strategies.target.NormalizedPixelTarget
+  patch_size: ${patch_size}
+  in_chans: ${in_chans}
+
+loss:
+  _target_: models.strategies.loss.SaliencyWeightedLoss
+  patch_size: ${patch_size}
+  warmup_epochs: 20
+  saliency_scale: 1.0
+
+use_last_ckpt: true

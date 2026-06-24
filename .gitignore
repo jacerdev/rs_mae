@@ -2,11 +2,11 @@
 __pycache__/
 
 # Files
-/best_ckpt.txt
+/best_ckpt_*
 /todos.txt
 context.md
 reben_profiled.py
-/runs.json
+*_dummy*
 
 
 # Folders

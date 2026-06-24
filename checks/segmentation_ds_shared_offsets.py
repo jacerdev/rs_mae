@@ -41,7 +41,7 @@ def main():
         _, _, worker_offsets = batch
         break
         
-    dataset.set_epoch(1)
+    dataset.shift_grid(1)
     
     print(f"\n[Epoch 1] Main process self.offsets: {dataset.offsets.tolist()}")
     for batch in loader:

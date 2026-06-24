@@ -126,7 +126,7 @@ class ReBENDataset(Dataset):
                  normalize=True, transform=None, # transform must be an albumentations.Compose
                  val_to_train_frac=0.0, test_to_train_frac=0.0, seed=42, # requires split_file
                  blocklist_path=None, # blocklist_path is a path to a csv/parquet file containing column "patch_id"
-                 return_mask=False):
+                 return_mask=False, include_unlisted=False):
         super().__init__()
 
         self.data_dir = str(data_dir)
@@ -141,7 +141,7 @@ class ReBENDataset(Dataset):
         # load all tensor keys present in the LMDB
         self.env = None
         keys_path = Path(keys_path) if keys_path is not None else None
-        if keys_path is not None and keys_path.exists() and keys_path.stat().st_mtime >= Path(data_dir).stat().st_mtime:
+        if keys_path is not None and keys_path.exists() and keys_path.stat().st_mtime >= (Path(data_dir) / "data.mdb").stat().st_mtime:
             with keys_path.open("rb") as f:
                 available_keys = set(pickle.load(f))
             logging.info(f"Cached {len(available_keys)} keys from {keys_path}")
@@ -173,6 +173,12 @@ class ReBENDataset(Dataset):
                   pd.read_parquet(split_file, columns=["split", "patch_id"]))
             split_keys = set(df[df['split'] == split]["patch_id"]).intersection(available_keys)
             
+            if include_unlisted and split == "train":
+                all_listed_keys = set(df["patch_id"])
+                unlisted_keys = available_keys - all_listed_keys
+                unlisted_keys = set([k for k in unlisted_keys if not k.endswith("_reference_map")])
+                split_keys = split_keys.union(unlisted_keys)
+            
             # Perform transfer from val/test set to train set if requested and valid
             if (val_to_train_frac > 0.0 or test_to_train_frac > 0.0) and split in ("train", "validation", "test"):
                 if split == "train":
@@ -193,8 +199,16 @@ class ReBENDataset(Dataset):
         # lookup table to convert mask classes
         if self.return_mask:
             self.lut = torch.full((1000,), -1, dtype=torch.long) # -1 is the ignore_index
-            for k, v in ReBENDataset.CLC_TO_LULC.items():
-                self.lut[k] = v
+            
+            if self.return_mask == "clc":
+                # create a contiguous mapping
+                valid_clc = sorted([k for k, v in ReBENDataset.CLC_TO_LULC.items() if v != -1])
+                clc_to_contiguous = {clc: i for i, clc in enumerate(valid_clc)}
+                for k in ReBENDataset.CLC_TO_LULC.keys():
+                    self.lut[k] = clc_to_contiguous.get(k, -1) # -1 for ignored classes
+            else:
+                for k, v in ReBENDataset.CLC_TO_LULC.items():
+                    self.lut[k] = v
 
     def __len__(self):
         return len(self.keys)
@@ -206,7 +220,7 @@ class ReBENDataset(Dataset):
         key_str = self.keys[idx]
         with self.env.begin(write=False) as txn:
             byte_data = txn.get(key_str.encode('ascii'))
-            tensor_dict = load_safetensors(byte_data)
+            tensor_dict = load_safetensors(decompress_bytes(byte_data))
         
         # build image stack
         band_tensors = []
@@ -225,7 +239,7 @@ class ReBENDataset(Dataset):
             with self.env.begin(write=False) as txn:
                 mask_bytes = txn.get(mask_key.encode('ascii'))
                 if mask_bytes is None: raise ValueError(f"Mask missing for {key_str}")
-                mask = load_safetensors(mask_bytes)["Data"].long().squeeze()
+                mask = load_safetensors(decompress_bytes(mask_bytes))["Data"].long().squeeze()
 
             # map to LULC Classes and align resolution
             mask = self.lut[mask]
@@ -271,4 +285,8 @@ def _apply_fractional_split(target_keys : set, source_keys : set, frac, seed=42)
 
     return target_keys.union(transferred_keys), remaining_source_keys
             
-
+def decompress_bytes(data) -> bytes:
+    if data[:2] == b'\x1f\x8b':
+        import gzip
+        return gzip.decompress(data)
+    return data

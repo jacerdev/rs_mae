@@ -7,7 +7,6 @@ import subprocess
 class TrainingState:
     _instance = None
     epoch = 0
-
     def __new__(cls):
         if not cls._instance:
             cls._instance = super(TrainingState, cls).__new__(cls)
@@ -16,19 +15,9 @@ class TrainingState:
 TRAINING_STATE = TrainingState()
 
 class TrainingStateCallback(L.Callback):
-    """
-    Updates global training state and calls functions that need one call per epoch.
-    """
-    def on_train_epoch_end(self, trainer, pl_module):
-        next_epoch = trainer.current_epoch + 1
-        
-        # 1. Update official global state for the NEXT epoch 
-        TRAINING_STATE.epoch = next_epoch
-        
-        # 2. Call end of epoch methods
-        if hasattr(trainer, "datamodule") and trainer.datamodule is not None:
-            if hasattr(trainer.datamodule, "train_ds") and hasattr(trainer.datamodule.train_ds, "set_epoch"):
-                trainer.datamodule.train_ds.set_epoch(next_epoch)
+    def on_train_epoch_start(self, trainer, pl_module):
+        TRAINING_STATE.epoch = trainer.current_epoch
+
 
 class CheckpointSyncCallback(L.Callback):
     def __init__(self, checkpoints_dir, sync_root="/content/drive/My Drive/saved_checkpoints/"):

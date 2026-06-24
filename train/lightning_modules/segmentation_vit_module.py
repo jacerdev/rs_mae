@@ -38,13 +38,12 @@ class SegmentationViTModule(L.LightningModule):
         self.model = SegmentationViT(**asdict(self.model_cfg))
 
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
+        
         #self.train_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
         self.val_acc = MulticlassAccuracy(num_classes=model_cfg.num_classes, ignore_index=-1, average='micro')
-        
-        #self.train_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
-        self.val_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1)
-        
-        #self.train_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
+        #self.train_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
+        self.val_iou = JaccardIndex(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
+        self.train_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
         self.val_f1 = F1Score(task="multiclass", num_classes=model_cfg.num_classes, ignore_index=-1, average='macro')
 
     def forward(self, x):
@@ -58,11 +57,11 @@ class SegmentationViTModule(L.LightningModule):
         loss = self.loss_fn(preds, masks)
         #self.train_acc(preds, masks)
         #self.train_iou(preds, masks)
-        #self.train_f1(preds, masks)
+        self.train_f1(preds, masks)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
-        #self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        #self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
         #self.log("train_iou", self.train_iou, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
-        #self.log("train_f1", self.train_f1, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        self.log("train_f1", self.train_f1, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         
         if batch_idx == 0:
             self._log_predictions({"imgs": imgs, "preds": preds, "masks": masks}, "train")
@@ -92,8 +91,8 @@ class SegmentationViTModule(L.LightningModule):
                 preds_list.append(pred)
             preds = torch.stack(preds_list, dim=0) # (B, num_classes, H, W) on CPU
             
-            loss = windowed_evaluation(preds=preds, masks=masks, input_size=input_size,
-                                   batch_size=self.trainer.datamodule.batch_size,
+            loss = windowed_evaluation(preds=preds, masks=masks,
+                                   tile_size=int(input_size * self.trainer.datamodule.batch_size**0.5),
                                    loss_fn=self.loss_fn,
                                    torchmetrics=[self.val_acc, self.val_iou, self.val_f1])
 
@@ -125,14 +124,6 @@ class SegmentationViTModule(L.LightningModule):
                                 backbone_lr=scaled_backbone_lr, decoder_lr=scaled_decoder_lr,
                                 layer_lr_decay=self.layer_lr_decay)
         optimizer = torch.optim.AdamW(param_groups, betas=(0.9, 0.999))
-
-        # scheduler
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min",
-        #                                         factor=self.reduce_lr_factor, patience=self.reduce_lr_patience, threshold=self.reduce_lr_threshold,
-        #                                         min_lr=1e-6)
-
-        # return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "monitor": "val_loss",
-        #                                                 "interval": "epoch", "frequency": 1}}
 
         # scheduler (linear warmup + cosine annealing)
         total_steps = self.trainer.estimated_stepping_batches
@@ -178,8 +169,7 @@ class SegmentationViTModule(L.LightningModule):
         combined = torch.cat(rows, dim=0)
         
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
-        tag = f"predictions / {split}"
-        self.logger.log_image(key=tag, images=[grid], step=self.global_step)
+        self.logger.log_image(key=f"predictions/{split}", images=[grid], step=self.global_step)
 
 
 def get_parameter_groups_llrd(model, weight_decay, backbone_lr, decoder_lr, layer_lr_decay): # model is a SegmentationViT

@@ -21,10 +21,9 @@ class MaskedAutoencoderViT(nn.Module):
                  embed_dim=1024, depth=24, num_heads=16,
                  decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
                  mlp_ratio=4., norm_layer=nn.LayerNorm,
-                 masker=None, target=None, loss=None,
-                 cls_token=True,
                  drop_path_rate=0., # vit-s 0.0, vit-b 0.1
-                 use_decoder=True,
+                 cls_token=True,
+                 masker=None, target=None, loss=None, use_decoder=True,
                  normalize=False, bands=None):
         super().__init__()
         
@@ -77,6 +76,9 @@ class MaskedAutoencoderViT(nn.Module):
         # Initialize weights
         self.initialize_weights()
 
+        if self.use_decoder and hasattr(self.target, 'set_encoder'):
+            self.target.set_encoder(self)
+
     def initialize_weights(self):
         w = self.patch_embed.proj.weight.data
         torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
@@ -110,8 +112,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         # append cls token
         if self.cls_token is not None:
-            cls_token = self.cls_token
-            cls_tokens = cls_token.expand(x.shape[0], -1, -1)
+            cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
             x = torch.cat((cls_tokens, x), dim=1)
 
         x = self.pos_embed(x, ids_keep)
@@ -150,21 +151,24 @@ class MaskedAutoencoderViT(nn.Module):
         pred: [B, N, p*p*C_out]
         mask: [B, N], 0 is keep, 1 is remove,
         """
-        target = self.target(imgs, **kwargs)
+        target = self.target(imgs, online_encoder=self, **kwargs)
         return self.loss(pred, target, mask, **kwargs)
 
     def forward(self, imgs, mask_ratio=0.75, **kwargs):
+        gt_masks = None
+        if isinstance(imgs, (tuple, list)): imgs, gt_masks = imgs
+
         raw_imgs = torch.nan_to_num(imgs.detach(), nan=0.0, posinf=0.0, neginf=0.0)
 
         if self.normalize:
             imgs = (imgs - self.mean) / self.std
         imgs = torch.nan_to_num(imgs, nan=0.0, posinf=0.0, neginf=0.0)
 
-        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, raw_imgs=raw_imgs, **kwargs)
+        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, raw_imgs=raw_imgs, gt_masks=gt_masks, **kwargs)
         pred = self.forward_decoder(latent, ids_restore)
         
-        loss, extra_losses = self.forward_loss(imgs, pred, mask, latent=latent, raw_imgs=raw_imgs)
-        return loss, pred, mask, extra_losses
+        loss, loss_components = self.forward_loss(imgs, pred, mask, raw_imgs=raw_imgs, gt_masks=gt_masks, latent=latent, **kwargs)
+        return loss, pred, mask, loss_components
 
 
 def load_pretrained_mae_weights(model, ckpt_path, bands):

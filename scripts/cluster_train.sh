@@ -2,10 +2,11 @@
 #SBATCH --job-name=rs_mae_train
 
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=200G
-#SBATCH --cpus-per-gpu=14
+#SBATCH --mem=80G
+#SBATCH --cpus-per-gpu=26
 #SBATCH --partition=gpu_short
-#SBATCH --time=0-10:00:00
+#SBATCH --time=0-14:00:00
+########SBATCH --nodelist=gpu026
 
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=aloui@campus.tu-berlin.de
@@ -53,47 +54,56 @@ while [[ $# -gt 0 && "$1" != *=* ]]; do
 done
 overrides="$@"
 
-datasets=("reben_7k" "sen1floods11" "cashew_plantation" "c2seg")
+# Force temporary files to be created on the scratch drive to prevent cross-device link errors
+export TMPDIR="/scratch/jacer/outputs/tmp"
+mkdir -p $TMPDIR
 
-echo "=================================================="
-send_telegram "🚀 Starting Pretraining for: ${experiments[*]}"
-echo "=================================================="
+# Loop over experiments with a 2-step jump for parallel pretraining
+for ((i=0; i<${#experiments[@]}; i+=2)); do
+    exp1=${experiments[$i]}
+    exp2=${experiments[$i+1]}
 
-for experiment in "${experiments[@]}"; do
-    python -m train.pretrain experiment="$experiment" $overrides &
-    echo "Started pretraining for $experiment (PID: $!)"
+    echo "=================================================="
+    send_telegram "🚀 Pretraining: $exp1 & $exp2"
+    echo "=================================================="
+
+    python -m train.pretrain experiment="$exp1" $overrides &
+    pid1=$!
+
+    pid2=""
+    if [ -n "$exp2" ]; then # run 2nd experiment in parallel if exists
+        python -m train.pretrain experiment="$exp2" $overrides &
+        pid2=$!
+    fi
+
+    wait $pid1 ${pid2:+$pid2}
 done
 
-wait
 
-for experiment in "${experiments[@]}"; do
-    echo "=================================================="
-    send_telegram "🧬 Starting Finetuning: $experiment"
-    echo "=================================================="
+datasets=("c2seg_augsburg" "mmhunan" "cashew_plantation" "reben_7k" "c2seg_beijing")
 
-    # Loop over datasets with a 2-step jump for parallel batching
-    for ((i=0; i<${#datasets[@]}; i+=2)); do
-        ds1=${datasets[$i]}
-        ds2=${datasets[$i+1]}
+# Loop over datasets with a 2-step jump for parallel finetuning
+for dataset in "${datasets[@]}"; do
+    for ((i=0; i<${#experiments[@]}; i+=2)); do
+        exp1=${experiments[$i]}
+        exp2=${experiments[$i+1]}
 
-        echo "--------------------------------------------------"
-        send_telegram "🚀 Batch: $ds1 & $ds2 ($experiment)"
-        
-        # Launch first dataset in background
+        echo "=================================================="
+        send_telegram "🚀 Finetuning $dataset: $exp1 & $exp2"
+        echo "=================================================="
+
         python -m train.finetune \
-            experiment_name="$experiment" \
-            segmentation_ds="$ds1" $overrides &
+            experiment_name="$exp1" segmentation_ds="$dataset" $overrides &
         pid1=$!
 
-        # Launch second dataset in background (if it exists)
-        if [ ! -z "$ds2" ]; then
+        pid2=""
+        if [ ! -z "$exp2" ]; then
             python -m train.finetune \
-                experiment_name="$experiment" \
-                segmentation_ds="$ds2" $overrides &
+                experiment_name="$exp2" segmentation_ds="$dataset" $overrides &
             pid2=$!
         fi
 
-        wait $pid1 $pid2
+        wait $pid1 ${pid2:+$pid2}
     done
 done
 

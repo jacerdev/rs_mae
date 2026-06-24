@@ -1,13 +1,12 @@
 import cv2
 import math
-from matplotlib.colors import to_rgb
+from matplotlib.colors import to_rgb, hsv_to_rgb
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from datasets import ReBENDataset, BurnScarsDataset, Sen1Floods11Dataset, CashewPlantationDataset, C2SegDataset
-from utils.utils import CLASSES_TO_SEMANTIC, SEMANTIC_COLORS
+from datasets import ReBENDataset, BurnScarsDataset, Sen1Floods11Dataset, CashewPlantationDataset, C2SegDataset, MMHunanDataset
 
 
 def quant_norm(data, lower_quant=0.01, upper_quant=0.99):
@@ -40,7 +39,7 @@ def quant_norm(data, lower_quant=0.01, upper_quant=0.99):
 
 def plot_images(imgs, ncols=None, title=None, img_titles=None, size=7, dataset_name=None):
     """Plot a list of images. if image has 2 dims then it's treated as a segmentation mask"""
-    imgs = _ensure_image_list(imgs)
+    imgs = _ensure_batch(imgs)
     if ncols is None: ncols = math.ceil(math.sqrt(len(imgs)))
 
     num_imgs = len(imgs)
@@ -51,10 +50,10 @@ def plot_images(imgs, ncols=None, title=None, img_titles=None, size=7, dataset_n
         plt.subplot(nrows, ncols, i + 1)
         img = imgs[i]
 
-        #if img.shape[-1] == 1: # if segmentation mask
-        #    plot_segmentation_mask(img, dataset_name=dataset_name)
-        #else:
-        plt.imshow(img)
+        if img.shape[-1] == 1: # if segmentation mask
+            plot_segmentation_mask(img, dataset_name=dataset_name)
+        else:
+            plt.imshow(img)
         if img_titles is not None: plt.title(img_titles[i])
 
         plt.axis('off')
@@ -66,10 +65,14 @@ def get_color_tensor(dataset_name=None, max_id=None, cmap_name="tab20"):
     """Creates a tensor of shape (max_class_id + 2, 3) for efficient RGB masking"""
     if dataset_name is None:
         if max_id is None: raise ValueError("max_id must be provided when dataset_name is None")
-        cmap_source = plt.get_cmap(cmap_name)
         
-        # +2 allows index -1 (ignore_index class) to access the last element safely
-        colors = cmap_source(np.linspace(0, 1, max_id + 2))[:, :3]  # drop alpha
+        n = max_id + 2 # +2 allows index -1 (ignore_index class) to access the last element safely
+
+        if cmap_name == "custom":
+            colors = np.array([hsv_to_rgb((i / n, 0.75, 0.95)) for i in range(n)])
+        else:
+            cmap_source = plt.get_cmap(cmap_name)
+            colors = cmap_source(np.linspace(0, 1, n))[:, :3]
         return torch.tensor(colors, dtype=torch.float32)
         
     dataset_name = dataset_name.lower()
@@ -84,6 +87,8 @@ def get_color_tensor(dataset_name=None, max_id=None, cmap_name="tab20"):
             id_to_class = CashewPlantationDataset.CLASSES
         case "c2seg_augsburg" | "c2seg_berlin" | "c2seg_beijing" | "c2seg_wuhan":
             id_to_class = C2SegDataset.CLASSES
+        case "mmhunan":
+            id_to_class = MMHunanDataset.CLASSES
         case _:
             raise ValueError(f"Unknown dataset: {dataset_name}")
         
@@ -101,7 +106,7 @@ def get_color_tensor(dataset_name=None, max_id=None, cmap_name="tab20"):
 
 def prepare_segmentation_visuals(imgs, masks, preds, bands=None, dataset_name=None):
     color_tensor = get_color_tensor(dataset_name) if dataset_name is not None else \
-                    get_color_tensor(max_id=preds.shape[1]) # num_classes
+                    get_color_tensor(max_id=preds.shape[1], cmap_name="custom") # num_classes
     color_tensor = color_tensor.to(masks.device)
 
     # imgs
@@ -215,7 +220,7 @@ def generate_hog_image(hog_grid: torch.Tensor,
     return hog_image
 
 
-def _ensure_image_list(img):
+def _ensure_batch(img):
     """
     Ensure input images are a list of (H, W, C) arrays suitable for plotting
     
@@ -271,3 +276,108 @@ def plot_segmentation_mask(mask, dataset_name=None):
     plt.imshow(rgb_mask, interpolation="nearest")
     plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.axis("off")
+
+
+SEMANTIC_COLORS = {
+    "unlabeled": "#808080",              # neutral gray
+    
+    # Human Impact / Infrastructure
+    "urban": "#e31a1c",                  # distinct red
+    "industrial": "#6a3d9a",             # deep purple
+    "street": "#333333",                 # dark charcoal
+    "industrial_disturbance": "#4d004b", # very dark purple
+    "burn_scar": "#7f0000",              # dark mahogany
+    
+    # Agriculture (Yellow/Brown Tones)
+    "arable": "#fff5d7",                 # pale cream
+    "permanent_crops": "#d95f02",        # burnt orange
+    "pasture": "#ffff99",                # soft yellow
+    "mixed_agriculture": "#fdbf6f",      # light orange-tan
+    "agriculture_natural_mix": "#b2df8a",# pale lime
+    "agroforestry": "#8c510a",           # deep earth brown
+    
+    # Natural Vegetation (Green Tones)
+    "forest_broadleaf": "#33a02c",       # standard mid-green
+    "forest_conifer": "#00441b",         # deep forest green
+    "forest_mixed": "#1b7837",           # hunter green
+    "natural_grassland": "#c2e699",      # light pastel green
+    "heathland": "#78c679",              # medium-light green
+    "shrubland": "#41ab5d",              # sage green
+    "artificial_vegetation": "#a6d854",  # bright yellow-green
+    
+    # Water & Coast (Blue/Beige Tones)
+    "beach_sand": "#f5f240",             # warm sand
+    "wetland_inland": "#4eb3d3",         # bright sky blue
+    "wetland_coastal": "#0868ac",        # deep ocean blue
+    "water_inland": "#7fcdbb",           # turquoise-cyan
+    "water_marine": "#084594",           # navy blue
+}
+
+CLASSES_TO_SEMANTIC = {
+    # ReBEN
+    "Unlabeled": "unlabeled",
+    "Urban fabric": "urban",
+    "Industrial or commercial units": "industrial",
+    "Arable land": "arable",
+    "Permanent crops": "permanent_crops",
+    "Pastures": "pasture",
+    "Complex cultivation patterns": "mixed_agriculture",
+    "Land principally occupied by agriculture, with significant areas of natural vegetation": "agriculture_natural_mix",
+    "Agro-forestry areas": "agroforestry",
+    "Broad-leaved forest": "forest_broadleaf",
+    "Coniferous forest": "forest_conifer",
+    "Mixed forest": "forest_mixed",
+    "Natural grassland and sparsely vegetated areas": "natural_grassland",
+    "Moors, heathland and sclerophyllous vegetation": "heathland",
+    "Transitional woodland, shrub": "shrubland",
+    "Beaches, dunes, sands": "beach_sand",
+    "Inland wetlands": "wetland_inland",
+    "Coastal wetlands": "wetland_coastal",
+    "Inland waters": "water_inland",
+    "Marine waters": "water_marine",
+    
+    # Sen1Floods11
+    "Missing data": "unlabeled",
+    "No flood": "natural_grassland",
+    "Flood": "wetland_coastal",
+    
+    # BurnScars
+    #"Missing data": "unlabeled",
+    "Not burned": "natural_grassland",
+    "Burn scar": "burn_scar",
+
+    # CashewPlantation
+    "No data": "unlabeled",
+    "Well-managed plantation": "permanent_crops",
+    "Poorly-managed plantation": "agroforestry",
+    "Non-plantation": "mixed_agriculture",
+    "Residential": "urban",
+    "Background_cashew": "agriculture_natural_mix",
+    "Uncertain": "arable",
+
+    # C2Seg
+    "Background_c2seg": "unlabeled",
+    "Surface water": "water_inland",
+    "Street": "street",
+    "Urban Fabric": "urban",
+    "Industrial, commercial and transport": "industrial",
+    "Mine, dump, and construction sites": "industrial_disturbance",
+    "Artificial, vegetated areas": "artificial_vegetation",
+    "Arable Land": "arable",
+    "Permanent Crops": "permanent_crops",
+    #"Pastures": "pasture",
+    "Forests": "forest_mixed",
+    "Shrub": "shrubland",
+    "Open spaces with no vegetation": "natural_grassland",
+    #"Inland wetlands": "wetland_inland",
+
+    # MMHunan
+    "Missing data": "unlabeled",
+    "Cropland": "arable",
+    "Forest": "forest_mixed",
+    "Grassland": "natural_grassland",
+    "Wetland": "wetland_inland",
+    "Water": "water_inland",
+    "Unused land": "beach_sand",
+    "Built-up area": "urban"
+}

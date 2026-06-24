@@ -28,7 +28,7 @@ class ReBENDataModule(L.LightningDataModule):
     def setup(self, stage=None):
         def _create_dataset(split: str, transform=None):
             return ReBENDataset(**{**asdict(self.dataset_cfg)},
-                                split=split, transform=transform, return_mask=False)
+                                split=split, transform=transform)
     
         if stage == "fit" or stage is None:
             self.train_ds = _create_dataset("train", transform=self.train_transform)

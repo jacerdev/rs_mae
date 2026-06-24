@@ -15,12 +15,16 @@ get_value() {
 
 send_telegram() {
     # usage: send_telegram "message"
-    # the message should never contain an ampersand (&) or a plus (+)
     local BOT_TOKEN=$(get_value "$SECRETS_PATH" "BOT_TOKEN")
     local CHAT_ID=$(get_value "$SECRETS_PATH" "CHAT_ID")
     local message="$1"
     echo "📣: $message"
-    wget --quiet --spider --post-data="chat_id=$CHAT_ID&text=$message" \
+    
+    # URL encode special characters ('&', '+') that break x-www-form-urlencoded
+    local encoded_message="${message//&/%26}"
+    encoded_message="${encoded_message//+/%2B}"
+    
+    wget --quiet --spider --post-data="chat_id=$CHAT_ID&text=$encoded_message" \
     "https://api.telegram.org/bot$BOT_TOKEN/sendMessage"
 }
 

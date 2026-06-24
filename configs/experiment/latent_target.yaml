@@ -1,0 +1,16 @@
+# @package _global_
+experiment_name: "latent_target"
+
+masker:
+  _target_: models.strategies.masker.RandomMasker
+
+target:
+  _target_: models.strategies.target.LatentTarget
+  patch_size: ${patch_size}
+  in_chans: ${in_chans}
+  embed_dim: 384 # ${model.embed_dim}
+  m: 0.996
+  norm_pix: true
+
+loss:
+  _target_: models.strategies.target.latent.LatentTargetLoss

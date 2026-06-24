@@ -1,6 +1,8 @@
-import torch
 import torch.nn as nn
+
+from models.strategies.loss import MaskedMSELoss
 from models.strategies.target.base import TargetGenerator
+
 from utils.features import HOGLayer, NDILayer
 from utils.spatial_ops import patchify, z_normalize, z_denormalize
 
@@ -16,8 +18,6 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 	MRO: nn.Module comes first so nn.Module.__call__ takes precedence over
 	TargetGenerator.__call__, dispatching correctly to forward().
 	"""
-	NDI_CHANNELS = 3  # NDVI, NDWI, NDBI
-
 	def __init__(self, patch_size, bands, pool, nbins=9, use_max_gradient=False, gaussian_window=None,
 				 normalize=True, norm_pix=True, **kwargs):
 		nn.Module.__init__(self)
@@ -29,7 +29,9 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 		self.hog_out_channels = 1 if use_max_gradient else len(bands)
 
 		self._hog_feats = (patch_size // pool)**2 * self.hog_out_channels * nbins
-		self._ndi_feats = patch_size**2 * HOGNDITarget.NDI_CHANNELS
+
+		self.NUM_NDI_CHANNELS = 3  # NDVI, NDWI, NDBI
+		self._ndi_feats = patch_size**2 * self.NUM_NDI_CHANNELS
 
 		TargetGenerator.__init__(self, patch_size=patch_size,
 								out_features=self._hog_feats + self._ndi_feats, **kwargs)
@@ -91,3 +93,14 @@ class HOGNDITarget(nn.Module, TargetGenerator):
 		ndi_img = self.ndi(raw_imgs)
 		ndi_tokens = patchify(ndi_img, self.patch_size) 
 		return ndi_tokens # [B, N, p²*3]
+
+
+class HOGNDILoss(MaskedMSELoss):
+    """Wrapper for MaskedMSELoss to returns individual losses as a dict"""
+    def __call__(self, pred, target, mask, **kwargs):
+        total_loss, loss_components = super().__call__(pred, target, mask, **kwargs)
+        
+        return total_loss, {
+            "hog_loss": loss_components["mse_loss_0"],
+            "ndi_loss": loss_components["mse_loss_1"]
+        }

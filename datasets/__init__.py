@@ -5,5 +5,6 @@ from .segmentation_ds import (
     BurnScarsDataset,
     Sen1Floods11Dataset,
     CashewPlantationDataset,
-    C2SegDataset
+    C2SegDataset,
+    MMHunanDataset
 )

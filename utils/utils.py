@@ -1,49 +1,33 @@
+import csv
+import fcntl
+from io import StringIO
 import json
-import lightning as L
 import logging
 import os
+import pandas as pd
 from pathlib import Path
 import subprocess
 import sys
 
 ### hardcoded stuff ###
 
-def get_checkpoint_path(experiment, dataset_name, artifacts_dir, wandb_project="RS_MAE-Thesis"):
-    workspace_root = Path(__file__).parents[1]
-    runs_json_path = workspace_root / "runs.json"
+def get_checkpoints_dir(experiment_key, dataset_name, artifacts_dir, wandb_project="RS_MAE-Thesis", json_path="all_runs.json"):
+    json_path = Path(json_path)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
     
-    with open(runs_json_path, "r") as f:
+    with open(json_path, "r") as f:
         runs_data = json.load(f)
     
     if dataset_name == "c2seg_wuhan": dataset_name = "c2seg_beijing"
     elif dataset_name == "c2seg_berlin": dataset_name = "c2seg_augsburg"
-    run_id = runs_data.get(experiment, {}).get(dataset_name, {}).get("run_id")
+    run_id = runs_data.get(experiment_key, {}).get(dataset_name, {}).get("run_id")
     if not run_id:
-        raise ValueError(f"Run ID not found for experiment='{experiment}', dataset_name='{dataset_name}' in {runs_json_path}")
+        raise ValueError(f"Run ID not found for experiment_key='{experiment_key}', dataset_name='{dataset_name}' in {json_path}")
     
     ckpt_dir = Path(artifacts_dir) / wandb_project / run_id / "checkpoints"
-    
-    def _find_best(directory):
-        if not directory.exists():
-            return None
-        
-        ckpts = list(directory.glob("seg-*.ckpt")) + list(directory.glob("mae-*.ckpt"))
-        if not ckpts:
-            return None
-        
-        best_ckpt, min_loss = None, float('inf')
-        for ckpt in ckpts:
-            loss_str = ckpt.stem.split("=")[-1]
-            loss = float(loss_str)
-            if loss < min_loss:
-                min_loss = loss
-                best_ckpt = ckpt
-        
-        return best_ckpt
-
-    best_ckpt_path = _find_best(ckpt_dir)
-    
-    if not best_ckpt_path:
+   
+    has_ckpts = any(ckpt_dir.glob("seg-*.ckpt")) or any(ckpt_dir.glob("mae-*.ckpt"))
+    if not has_ckpts:
         logging.info(f"Checkpoint not found in {ckpt_dir}. Attempting to rsync from cluster...")
         
         remote_path = f"jacer@gateway.hpc.tu-berlin.de:/scratch/jacer/outputs/training_out/{wandb_project}/{run_id}"
@@ -57,14 +41,280 @@ def get_checkpoint_path(experiment, dataset_name, artifacts_dir, wandb_project="
             subprocess.run(f'rsync -avP --exclude last.ckpt {remote_path} {str(local_dest)}', 
                            shell=True, executable="/bin/bash", check=True, env=env)
             logging.info("rsync completed successfully.")
-            best_ckpt_path = _find_best(ckpt_dir)
+
+            has_ckpts_after_rsync = any(ckpt_dir.glob("seg-*.ckpt")) or any(ckpt_dir.glob("mae-*.ckpt"))
+            if not has_ckpts_after_rsync:
+                raise FileNotFoundError(f"Could not find any valid checkpoints in {ckpt_dir} after rsync.")
+            
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Could not retrieve checkpoints from cluster for run_id {run_id}. Error: {e}")
-
-    if not best_ckpt_path:
-        raise FileNotFoundError(f"Could not find any valid checkpoints in {ckpt_dir} after rsync attempt.")
         
-    return str(best_ckpt_path)
+    return ckpt_dir
+
+def find_best_ckpt(directory):
+    if not directory.exists():
+        return None
+    
+    ckpts = list(directory.glob("seg-*.ckpt")) + list(directory.glob("mae-*.ckpt"))
+    if not ckpts:
+        return None
+    
+    best_ckpt, best_val = None, None
+    
+    for ckpt in ckpts:
+        val = float(ckpt.stem.split("=")[-1]) # numerical value after last '='
+
+        is_iou = "val_iou" in ckpt.name
+        if best_val is None:
+            best_val = val
+            best_ckpt = ckpt
+        elif is_iou and val > best_val:
+            best_val = val
+            best_ckpt = ckpt
+        elif not is_iou and val < best_val:
+            best_val = val
+            best_ckpt = ckpt
+            
+    return best_ckpt
+
+def log_run_to_json(experiment_name, seed, dataset_name, run_name, run_id, json_path="all_runs.json"):
+    json_path = Path(json_path)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(json_path, 'a+') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            content = f.read()
+            runs_data = {}
+            if content:
+                try:
+                    runs_data = json.loads(content)
+                except json.JSONDecodeError:
+                    pass
+                    
+            exp_key = f"{experiment_name}-{seed}"
+            if exp_key not in runs_data:
+                runs_data[exp_key] = {}
+                
+            if dataset_name in runs_data[exp_key]:
+                existing_run_name = runs_data[exp_key][dataset_name].get("run_name")
+                existing_run_id = runs_data[exp_key][dataset_name].get("run_id")
+                if existing_run_id != run_id:
+                    logging.error(f"Run for experiment {exp_key} and dataset {dataset_name} already exists in {json_path} (run_name={existing_run_name}, run_id={existing_run_id}). Overwriting with run_name={run_name}, run_id={run_id}.")
+                    
+            runs_data[exp_key][dataset_name] = {
+                "run_name": run_name,
+                "run_id": run_id
+            }
+            
+            f.seek(0)
+            f.truncate()
+            json.dump(runs_data, f, indent=4)
+            f.flush()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+def log_results(results, dataset_name, experiment_name, csv_path="results.csv", group=None):
+    """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
+    experiment_col = experiment_name.replace("_", " ").title().strip()
+
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(csv_path, 'a+') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            content = f.read()
+            if content:
+                df_raw = pd.read_csv(StringIO(content), header=None, dtype=str, keep_default_na=False)
+                top_row = df_raw.iloc[0].tolist()
+                columns = [str(c).strip() for c in df_raw.iloc[1].tolist()]
+                df = df_raw.iloc[2:].copy()
+                df.columns = columns
+            else:
+                top_row = ["", ""]
+                columns = ["Dataset", "Metric"]
+                df = pd.DataFrame(columns=columns)
+
+            # normalize
+            df = df.astype(object)
+            df["Dataset"] = df["Dataset"].astype(str).str.strip().replace(r"^\s*$", pd.NA, regex=True).ffill()
+            df["Metric"] = df["Metric"].astype(str).str.strip()
+
+            full_groups = []
+            current_g = ""
+            for g in top_row:
+                g_str = str(g).strip()
+                if g_str != "":
+                    current_g = g_str
+                full_groups.append(current_g)
+
+            # ensure column exists
+            if experiment_col not in df.columns:
+                df[experiment_col] = None
+                
+                if group:
+                    group = str(group).lower().strip()
+                    if group in full_groups:
+                        last_idx = len(full_groups) - 1 - full_groups[::-1].index(group)
+                        insert_idx = last_idx + 1
+                        columns.insert(insert_idx, experiment_col)
+                        full_groups.insert(insert_idx, group)
+                    else:
+                        columns.append(experiment_col)
+                        full_groups.append(group)
+                else:
+                    columns.append(experiment_col)
+                    full_groups.append("")
+                
+                df = df[columns]
+
+            # insert / update
+            for metric_name, val in results.items():
+                if metric_name == "loss":
+                    continue
+
+                metric_name = metric_name.strip()
+                mask = (df["Dataset"] == dataset_name) & (df["Metric"] == metric_name)
+
+                if mask.any():
+                    df.loc[mask, experiment_col] = f"{val*100:.2f}"
+                else:
+                    new_row = {
+                        "Dataset": dataset_name,
+                        "Metric": metric_name,
+                        experiment_col: f"{val*100:.2f}"
+                    }
+                    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+            # keep table structured
+            metric_order = ["OA", "mIoU", "mF1"]
+            df["Metric"] = pd.Categorical(df["Metric"], categories=metric_order, ordered=True)
+            df = df.sort_values(by=["Dataset", "Metric"]).reset_index(drop=True)
+
+            # blank repeated dataset names
+            df_out = df.copy()
+            df_out["Dataset"] = df_out["Dataset"].where(
+                df_out["Dataset"] != df_out["Dataset"].shift(), "")
+
+            # rebuild top_row to ensure exact formatting
+            final_top_row = []
+            seen_groups = set()
+            for g in full_groups:
+                if g != "" and g not in seen_groups:
+                    final_top_row.append(g)
+                    seen_groups.add(g)
+                else:
+                    final_top_row.append("")
+
+            f.seek(0)
+            f.truncate()
+            
+            writer = csv.writer(f)
+            writer.writerow(final_top_row)
+            writer.writerow(columns)
+            
+            # replace NaN with empty string
+            df_out = df_out.fillna("")
+            for _, row in df_out.iterrows():
+                writer.writerow(row.tolist())
+                
+            f.flush()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def log_per_class_results(results, experiment_name, csv_path="benchmark_per_class_results.csv", group=None):
+    """results: dict mapping class names to F1 values"""
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(csv_path, 'a+') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            content = f.read()
+            if content:
+                df_raw = pd.read_csv(StringIO(content), header=None, dtype=str, keep_default_na=False)
+                top_row = df_raw.iloc[0].tolist()
+                columns = [str(c).strip() for c in df_raw.iloc[1].tolist()]
+                df = df_raw.iloc[2:].copy()
+                df.columns = columns
+            else:
+                top_row = [""]
+                columns = ["Class"]
+                df = pd.DataFrame(columns=columns)
+
+            df = df.astype(object)
+            df["Class"] = df["Class"].astype(str).str.strip()
+            
+            full_groups = []
+            current_g = ""
+            for g in top_row:
+                g_str = str(g).strip()
+                if g_str != "":
+                    current_g = g_str
+                full_groups.append(current_g)
+
+            experiment_col = experiment_name.replace("_", " ").title().strip()
+
+            if experiment_col not in df.columns:
+                df[experiment_col] = None
+                
+                if group:
+                    group = str(group).lower().strip()
+                    if group in full_groups:
+                        last_idx = len(full_groups) - 1 - full_groups[::-1].index(group)
+                        insert_idx = last_idx + 1
+                        columns.insert(insert_idx, experiment_col)
+                        full_groups.insert(insert_idx, group)
+                    else:
+                        columns.append(experiment_col)
+                        full_groups.append(group)
+                else:
+                    columns.append(experiment_col)
+                    full_groups.append("")
+                
+                df = df[columns]
+
+            for class_name, val in results.items():
+                class_name = str(class_name).strip()
+                mask = df["Class"] == class_name
+
+                if mask.any():
+                    df.loc[mask, experiment_col] = f"{val*100:.2f}"
+                else:
+                    new_row = {
+                        "Class": class_name,
+                        experiment_col: f"{val*100:.2f}"
+                    }
+                    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+            final_top_row = []
+            seen_groups = set()
+            for g in full_groups:
+                if g != "" and g not in seen_groups:
+                    final_top_row.append(g)
+                    seen_groups.add(g)
+                else:
+                    final_top_row.append("")
+
+            f.seek(0)
+            f.truncate()
+            
+            writer = csv.writer(f)
+            writer.writerow(final_top_row)
+            writer.writerow(columns)
+            
+            df = df.fillna("")
+            for _, row in df.iterrows():
+                writer.writerow(row.tolist())
+                
+            f.flush()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 def setup_logging(level="info"):
     class ColorFormatter(logging.Formatter):
@@ -96,97 +346,3 @@ def setup_logging(level="info"):
         logger.setLevel(logging.INFO)
     elif level == "debug":
         logger.setLevel(logging.DEBUG)
-
-SEMANTIC_COLORS = {
-    "unlabeled": "#808080",              # neutral gray
-    
-    # Human Impact / Infrastructure
-    "urban": "#e31a1c",                  # distinct red
-    "industrial": "#6a3d9a",             # deep purple
-    "street": "#333333",                 # dark charcoal
-    "industrial_disturbance": "#4d004b", # very dark purple
-    "burn_scar": "#7f0000",              # dark mahogany
-    
-    # Agriculture (Yellow/Brown Tones)
-    "arable": "#fff5d7",                 # pale cream
-    "permanent_crops": "#d95f02",        # burnt orange
-    "pasture": "#ffff99",                # soft yellow
-    "mixed_agriculture": "#fdbf6f",      # light orange-tan
-    "agriculture_natural_mix": "#b2df8a",# pale lime
-    "agroforestry": "#8c510a",           # deep earth brown
-    
-    # Natural Vegetation (Green Tones)
-    "forest_broadleaf": "#33a02c",       # standard mid-green
-    "forest_conifer": "#00441b",         # deep forest green
-    "forest_mixed": "#1b7837",           # hunter green
-    "natural_grassland": "#c2e699",      # light pastel green
-    "heathland": "#78c679",              # medium-light green
-    "shrubland": "#41ab5d",              # sage green
-    "artificial_vegetation": "#a6d854",  # bright yellow-green
-    
-    # Water & Coast (Blue/Beige Tones)
-    "beach_sand": "#fef0d9",             # warm sand
-    "wetland_inland": "#4eb3d3",         # bright sky blue
-    "wetland_coastal": "#0868ac",        # deep ocean blue
-    "water_inland": "#7fcdbb",           # turquoise-cyan
-    "water_marine": "#084594",           # navy blue
-}
-
-CLASSES_TO_SEMANTIC = {
-    # ReBEN
-    "Unlabeled": "unlabeled",
-    "Urban fabric": "urban",
-    "Industrial or commercial units": "industrial",
-    "Arable land": "arable",
-    "Permanent crops": "permanent_crops",
-    "Pastures": "pasture",
-    "Complex cultivation patterns": "mixed_agriculture",
-    "Land principally occupied by agriculture, with significant areas of natural vegetation": "agriculture_natural_mix",
-    "Agro-forestry areas": "agroforestry",
-    "Broad-leaved forest": "forest_broadleaf",
-    "Coniferous forest": "forest_conifer",
-    "Mixed forest": "forest_mixed",
-    "Natural grassland and sparsely vegetated areas": "natural_grassland",
-    "Moors, heathland and sclerophyllous vegetation": "heathland",
-    "Transitional woodland, shrub": "shrubland",
-    "Beaches, dunes, sands": "beach_sand",
-    "Inland wetlands": "wetland_inland",
-    "Coastal wetlands": "wetland_coastal",
-    "Inland waters": "water_inland",
-    "Marine waters": "water_marine",
-    
-    # Sen1Floods11
-    "Missing data": "unlabeled",
-    "No flood": "natural_grassland",
-    "Flood": "wetland_coastal",
-    
-    # BurnScars
-    #"Missing data": "unlabeled",
-    "Not burned": "natural_grassland",
-    "Burn scar": "burn_scar",
-
-    # CashewPlantation
-    "No data": "unlabeled",
-    "Well-managed plantation": "permanent_crops",
-    "Poorly-managed plantation": "agroforestry",
-    "Non-plantation": "mixed_agriculture",
-    "Residential": "urban",
-    "Background_cashew": "agriculture_natural_mix",
-    "Uncertain": "arable",
-
-    # C2Seg
-    "Background_c2seg": "unlabeled",
-    "Surface water": "water_inland",
-    "Street": "street",
-    "Urban Fabric": "urban",
-    "Industrial, commercial and transport": "industrial",
-    "Mine, dump, and construction sites": "industrial_disturbance",
-    "Artificial, vegetated areas": "artificial_vegetation",
-    "Arable Land": "arable",
-    "Permanent Crops": "permanent_crops",
-    #"Pastures": "pasture",
-    "Forests": "forest_mixed",
-    "Shrub": "shrubland",
-    "Open spaces with no vegetation": "natural_grassland",
-    #"Inland wetlands": "wetland_inland",
-}

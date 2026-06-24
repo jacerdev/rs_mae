@@ -1,11 +1,15 @@
 reben_dir:             "/mnt/ssd/datasets/reben/BigEarthNet-S2-1%_lmdb/"
-reben_keys:            "/mnt/ssd/datasets/reben/keys-1%.pkl"
 #reben_dir:             "/mnt/ssd/datasets/reben/reben_7k/"
-#reben_keys:            "/mnt/ssd/datasets/reben/keys_7k.pkl"
+reben_keys:            null
 
+reben_7k_dir:          "/mnt/ssd/datasets/reben/reben_7k/"
 sen1floods11_dir:      "/mnt/ssd/datasets/sen1floods11/"
 cashew_plantation_dir: "/mnt/ssd/datasets/cashew_plantation/"
 c2seg_dir:             "/mnt/ssd/datasets/c2seg/"
 burn_scars_dir:        "/mnt/ssd/datasets/burn_scars/"
+mmhunan_dir:           "/mnt/ssd/datasets/mmhunan/"
 
 wandb_outdir:          "/mnt/ssd/outputs/training_out/"
+
+init_ckpt_path:        "/mnt/ssd/outputs/training_out/baseline_ep16.ckpt"
+artifacts_dir:         "/mnt/ssd/.FINISHED_RUNS"

@@ -6,8 +6,6 @@ import torch
 import torchvision.utils as vutils
 
 from models.backbones import MaskedAutoencoderViT
-from models.strategies.target import HOGNDITarget
-from models.strategies.loss import FFTEnhancedLoss
 from utils.config import MaskedAutoencoderViT_Cfg
 from utils.spatial_ops import unpatchify
 from utils.visualization import quant_norm, generate_hog_image, generate_saliency_grid
@@ -34,44 +32,33 @@ class MAEModule(L.LightningModule):
 
         self.model = MaskedAutoencoderViT(**asdict(self.model_cfg), use_decoder=True)
 
-        self._log_recon_fn = self._log_hog_ndi_reconstructions if isinstance(self.model.target, HOGNDITarget) \
-                             else self._log_reconstructions
-
     def forward(self, x):
         return self.model(x, mask_ratio=self.mask_ratio)
 
     def training_step(self, batch, batch_idx):
-        loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio)
+        loss, pred, mask, loss_components = self.model(batch, mask_ratio=self.mask_ratio)
         
-        if isinstance(self.model.target, HOGNDITarget):
-            self.log("train_hog_loss", extra_losses[0], on_step=True, on_epoch=True, sync_dist=True)
-            self.log("train_ndi_loss", extra_losses[1], on_step=True, on_epoch=True, sync_dist=True)
-        elif isinstance(self.model.loss, FFTEnhancedLoss):
-            self.log("train_mse_loss", extra_losses[0], on_step=True, on_epoch=True, sync_dist=True)
-            self.log("train_amp_loss", extra_losses[1], on_step=True, on_epoch=True, sync_dist=True)
-            self.log("train_phase_loss", extra_losses[2], on_step=True, on_epoch=True, sync_dist=True)
-
+        if len(loss_components)>1:
+            for k, v in loss_components.items():
+                self.log(f"train_{k}", v, on_step=True, on_epoch=True, sync_dist=True)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
         
         if batch_idx == 0:
-            self._log_recon_fn({"imgs": batch, "pred": pred, "mask": mask}, "train")
+            self._log_reconstructions({"imgs": batch, "pred": pred, "mask": mask}, "train")
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, pred, mask, extra_losses = self.model(batch, mask_ratio=self.mask_ratio, phase="val")
+        loss, pred, mask, loss_components = self.model(batch, mask_ratio=self.mask_ratio, phase="validation")
         
-        if isinstance(self.model.target, HOGNDITarget):
-            self.log("val_hog_loss", extra_losses[0], on_epoch=True, sync_dist=True)
-            self.log("val_ndi_loss", extra_losses[1], on_epoch=True, sync_dist=True)
-        elif isinstance(self.model.loss, FFTEnhancedLoss):
-            self.log("val_mse_loss", extra_losses[0], on_epoch=True, sync_dist=True)
-            self.log("val_amp_loss", extra_losses[1], on_epoch=True, sync_dist=True)
-            self.log("val_phase_loss", extra_losses[2], on_epoch=True, sync_dist=True)
-
+        if len(loss_components)>1:
+            for k, v in loss_components.items():
+                self.log(f"val_{k}", v, on_epoch=True, sync_dist=True)
         self.log("val_loss", loss, on_epoch=True, prog_bar=True, sync_dist=True)
         
         if batch_idx == 0:
-            self._log_recon_fn({"imgs": batch, "pred": pred, "mask": mask}, "val")
+            self._log_reconstructions({"imgs": batch, "pred": pred, "mask": mask}, "val")
+
+    #def on_train_batch_end(self, outputs, batch, batch_idx):
 
     def on_before_optimizer_step(self, optimizer):
         norms = L.pytorch.utilities.grad_norm(self, norm_type=2)
@@ -106,6 +93,16 @@ class MAEModule(L.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "interval": "step"}}
 
     def _log_reconstructions(self, outputs, split):
+        from models.strategies.target import HOGNDITarget
+        from models.strategies.target.segmentation import SegmentationTarget
+        if hasattr(self.model, "target") and type(self.model.target).__name__ == "HOGNDITarget":
+            self._log_hog_ndi_reconstructions(outputs, split)
+        elif hasattr(self.model, "target") and type(self.model.target).__name__ == "SegmentationTarget":
+            self._log_segmentation_reconstructions(outputs, split)
+        else:
+            self._log_pixel_reconstructions(outputs, split)
+
+    def _log_pixel_reconstructions(self, outputs, split):
         imgs, pred, mask = outputs["imgs"].detach(), outputs["pred"].detach(), outputs["mask"].detach() 
         B, _, H, W = imgs.shape
 
@@ -120,7 +117,7 @@ class MAEModule(L.LightningModule):
         imgs, raw_imgs, pred, mask = imgs[indices], raw_imgs[indices], pred[indices], mask[indices]
 
         p = self.model.patch_embed.patch_size[0] # square patch
-        C = self.model.target.out_features // (p ** 2)
+        # C = self.model.target.out_features // (p ** 2)
         h, w = H // p, W // p
 
         mask_expanded = mask.reshape(num_samples, h, w).repeat_interleave(p, dim=1).repeat_interleave(p, dim=2).unsqueeze(1) # (num_samples, 1, H, W)
@@ -129,27 +126,39 @@ class MAEModule(L.LightningModule):
         masked_imgs = imgs * (1 - mask_expanded)
 
         # target
-        target = self.model.target(imgs).detach()
+        target_out = self.model.target(imgs)
+        is_tuple_target = isinstance(target_out, tuple)
+        
+        target = target_out[0].detach() if is_tuple_target else target_out.detach()
+        _pixel_feats = target.shape[-1]
+        C = _pixel_feats // (p ** 2)
         target = unpatchify(target, p, H, W, C)
 
         # output
-        recon_raw = unpatchify(pred, p, H, W, C)
+        pixel_pred = pred[..., :_pixel_feats] if is_tuple_target else pred
+        recon_raw = unpatchify(pixel_pred, p, H, W, C)
         recon_raw = target * (1 - mask_expanded) + recon_raw * mask_expanded
  
         # output restored
         recon_restored = self.model.target.restore(pred, gt_imgs=imgs)
         if recon_restored is not None:
+            recon_restored = recon_restored[0] if is_tuple_target else recon_restored
             recon_restored = unpatchify(recon_restored, p, H, W, C)
             recon_restored = imgs * (1 - mask_expanded) + recon_restored * mask_expanded
 
         # log
-        band_combinations = {"true_color": ["B04", "B03", "B02"], "red_edge": ["B07", "B06", "B05"], "vegetation": ["B08", "B04", "B03"], "moisture_composite": ["B8A", "B11", "B12"]}
+        band_combinations = {"RGB": ["B04", "B03", "B02"], "NIR": ["B07", "B06", "B05"], "SWIR": ["B11"]*3}
         band_indices = {name: [self.bands.index(b) for b in bands] for name, bands
                         in band_combinations.items()} if self.bands is not None else {"":[0,1,2]}
 
         for name, bands_idx in band_indices.items():
-            if hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker":
-                saliency = self.model.masker.saliency_extractor(raw_imgs).detach()
+            is_curriculum_masker = hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker"
+            is_weighted_loss = hasattr(self.model, "loss") and type(self.model.loss).__name__ == "SaliencyWeightedLoss"
+            is_glcm_loss = hasattr(self.model, "loss") and type(self.model.loss).__name__ == "MaskedGLCMLoss"
+            
+            if is_curriculum_masker or is_weighted_loss:
+                extractor = self.model.masker.saliency_extractor if is_curriculum_masker else self.model.loss.saliency_extractor
+                saliency = extractor(raw_imgs).detach()
                 saliency_grid_tensors = []
                 for i in range(num_samples):
                     s_overlay = generate_saliency_grid(saliency[i], image=quant_norm(imgs[i:i+1, bands_idx, :, :])[0].permute(1, 2, 0).cpu().numpy())
@@ -158,6 +167,18 @@ class MAEModule(L.LightningModule):
                 rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
                         torch.stack(saliency_grid_tensors).to(imgs.device), # saliency grid
                         quant_norm(imgs[:, bands_idx, :, :])] # unmasked input
+            elif is_glcm_loss:
+                error_map = self.model.loss.get_texture_error_map(recon_raw[:, bands_idx, :, :], target[:, bands_idx, :, :]).detach()
+                error_grid_tensors = []
+                for i in range(num_samples):
+                    em = error_map[i]
+                    em_norm = (em - em.min()) / (em.max() - em.min() + 1e-8)
+                    e_overlay = generate_saliency_grid(em_norm, image=quant_norm(imgs[i:i+1, bands_idx, :, :])[0].permute(1, 2, 0).cpu().numpy())
+                    error_grid_tensors.append(torch.from_numpy(e_overlay).float().permute(2, 0, 1) / 255.0)
+
+                rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
+                        quant_norm(imgs[:, bands_idx, :, :]), # unmasked input
+                        torch.stack(error_grid_tensors).to(imgs.device)] # GLCM error overlay
             else:
                 rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
                         quant_norm(imgs[:, bands_idx, :, :]), # unmasked input
@@ -168,8 +189,7 @@ class MAEModule(L.LightningModule):
             combined = torch.cat(rows, dim=0)
             
             grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
-            tag = f"reconstructions_{name} / {split} (mask_ratio={mask.float().mean().item():.2f})"
-            self.logger.log_image(key=tag, images=[grid], step=self.global_step)
+            self.logger.log_image(key=f"reconstructions/{split}_{name}", images=[grid], step=self.global_step)
 
     def _log_hog_ndi_reconstructions(self, outputs, split):
         imgs, pred, mask = outputs["imgs"].detach(), outputs["pred"].detach(), outputs["mask"].detach()
@@ -192,7 +212,7 @@ class MAEModule(L.LightningModule):
         # target
         hog_target, ndi_target = [t.detach() for t in self.model.target(imgs, raw_imgs=raw_imgs)]
         hog_target, ndi_target = self.model.target.restore(torch.cat([hog_target, ndi_target], dim=-1), gt_imgs=raw_imgs)
-        ndi_target = unpatchify(ndi_target, p, H, W, HOGNDITarget.NDI_CHANNELS)
+        ndi_target = unpatchify(ndi_target, p, H, W, self.model.target.NUM_NDI_CHANNELS)
         
         pool = self.model.target.pool
         nbins = self.model.target.nbins
@@ -202,7 +222,7 @@ class MAEModule(L.LightningModule):
 
         # output
         hog_pred, ndi_pred = self.model.target.restore(pred, gt_imgs=raw_imgs)
-        ndi_recon = unpatchify(ndi_pred, p, H, W, HOGNDITarget.NDI_CHANNELS)
+        ndi_recon = unpatchify(ndi_pred, p, H, W, self.model.target.NUM_NDI_CHANNELS)
         ndi_recon = ndi_target * (1 - mask_expanded) + ndi_recon * mask_expanded
 
         mask_expanded_hog = mask.reshape(num_samples, h, w).repeat_interleave(n, dim=1).repeat_interleave(n, dim=2).unsqueeze(1).unsqueeze(1) # (num_samples, 1, 1, hn, wn)
@@ -222,8 +242,7 @@ class MAEModule(L.LightningModule):
                             quant_norm(ndi_target + 1),
                             quant_norm(ndi_recon)], dim=0)
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
-        tag = f"reconstructions_ndi / {split} (mask_ratio={mask.float().mean().item():.2f})"
-        self.logger.log_image(key=tag, images=[grid], step=self.global_step)
+        self.logger.log_image(key=f"reconstructions/{split}_ndi", images=[grid], step=self.global_step)
         
         # HOG
         if self.model.target.hog_out_channels == 1: band_indices = [0]
@@ -245,5 +264,39 @@ class MAEModule(L.LightningModule):
                             hog_recon.repeat(1, 3, 1, 1),
                             hog_recon_overlayed], dim=0)
         grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
-        tag = f"reconstructions_hog / {split} (mask_ratio={mask.float().mean().item():.2f})"
-        self.logger.log_image(key=tag, images=[grid], step=self.global_step)
+        self.logger.log_image(key=f"reconstructions/{split}_hog", images=[grid], step=self.global_step)
+
+    def _log_segmentation_reconstructions(self, outputs, split):
+        from utils.visualization import prepare_segmentation_visuals
+
+        batch, pred, mask = outputs["imgs"], outputs["pred"].detach(), outputs["mask"].detach()
+        imgs, gt_masks = batch
+        imgs, gt_masks = imgs.detach(), gt_masks.detach()
+        B, _, H, W = imgs.shape
+
+        num_samples = min(B, 5)
+        indices = torch.randperm(B, generator=torch.Generator().manual_seed(self.current_epoch % 5))[:num_samples]
+        imgs, gt_masks, pred, mask = imgs[indices], gt_masks[indices], pred[indices], mask[indices]
+
+        p = self.model.patch_embed.patch_size[0]
+        h, w = H // p, W // p
+
+        mask_expanded = mask.reshape(num_samples, h, w).repeat_interleave(p, dim=1).repeat_interleave(p, dim=2).unsqueeze(1)
+        
+        #  unmasked input,target, output
+        C_out = pred.shape[-1] // (p ** 2)
+        pred_spatial = unpatchify(pred, p, H, W, C_out)
+        imgs_vis, gt_vis, pred_vis = prepare_segmentation_visuals(imgs, gt_masks, pred_spatial,
+                                                                bands=self.bands, dataset_name=None)
+        pred_vis = gt_vis * (1 - mask_expanded) + pred_vis * mask_expanded
+
+        # input (masked image)
+        masked_imgs = imgs_vis * (1 - mask_expanded)
+
+        rows = [masked_imgs, # input
+                imgs_vis, # unmasked input
+                gt_vis, # target
+                pred_vis] # output
+        combined = torch.cat(rows, dim=0)
+        grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
+        self.logger.log_image(key=f"reconstructions/{split}", images=[grid], step=self.global_step)

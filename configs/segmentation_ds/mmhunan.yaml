@@ -1,0 +1,18 @@
+# @package _global_
+
+img_size: 256
+batch_size: 16
+num_classes: 7
+num_bands: 10
+
+# Data
+dataset:
+  data_dir: ${paths.mmhunan_dir}
+  bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+  normalize: false
+
+  grid_sampling: false
+  crop_size: null
+
+dataset_name: "mmhunan"
+  
