@@ -1,14 +1,15 @@
-Class,Baseline,Latent Target,Hog Weighted,Feat Guided,Curriculum Ndi Sigmae,Curriculum Ndi,Baseline 200Ep,Baseline Full 200Ep,Segmentation Target,Curriculum Feat Unif,Glcm Loss
-Surface water,48.96,41.71,48.12,45.07,50.78,50.68,47.67,48.49,42.36,47.78,50.34
-Street,4.06,1.59,2.90,5.39,3.37,4.63,3.88,3.26,2.67,8.22,2.86
-Urban Fabric,73.24,71.10,73.61,74.07,72.69,73.38,72.12,74.14,65.71,73.75,74.04
-"Industrial, commercial and transport",52.97,54.22,53.52,55.03,51.96,53.33,53.41,59.82,55.43,56.97,54.70
-"Mine, dump, and construction sites",22.66,10.22,20.71,18.30,19.07,22.79,29.96,20.62,19.32,14.90,24.28
-"Artificial, vegetated areas",33.18,33.26,34.98,30.77,31.87,32.23,34.70,34.02,32.09,32.57,33.31
-Arable Land,65.17,62.67,65.88,69.56,63.38,65.31,63.07,64.75,49.66,68.13,64.37
+,baseline,,,masking,,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Ndi,Curriculum Ndi Sigmae,Latent Target,Feat Guided,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif
+Surface water,48.96,47.67,48.49,50.68,50.78,41.71,45.07,42.36,48.12,50.34,47.78
+Street,4.06,3.88,3.26,4.63,3.37,1.59,5.39,2.67,2.90,2.86,8.22
+Urban Fabric,73.24,72.12,74.14,73.38,72.69,71.10,74.07,65.71,73.61,74.04,73.75
+"Industrial, commercial and transport",52.97,53.41,59.82,53.33,51.96,54.22,55.03,55.43,53.52,54.70,56.97
+"Mine, dump, and construction sites",22.66,29.96,20.62,22.79,19.07,10.22,18.30,19.32,20.71,24.28,14.90
+"Artificial, vegetated areas",33.18,34.70,34.02,32.23,31.87,33.26,30.77,32.09,34.98,33.31,32.57
+Arable Land,65.17,63.07,64.75,65.31,63.38,62.67,69.56,49.66,65.88,64.37,68.13
 Permanent Crops,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
-Pastures,23.34,32.14,23.93,34.39,24.35,23.70,13.04,13.71,42.33,34.79,12.67
-Forests,77.36,73.72,77.73,76.48,76.50,76.40,77.41,77.16,76.35,74.06,76.43
-Shrub,0.02,0.00,0.10,0.34,0.40,0.14,0.23,0.32,0.01,0.42,0.54
+Pastures,23.34,13.04,13.71,23.70,24.35,32.14,34.39,42.33,23.93,12.67,34.79
+Forests,77.36,77.41,77.16,76.40,76.50,73.72,76.48,76.35,77.73,76.43,74.06
+Shrub,0.02,0.23,0.32,0.14,0.40,0.00,0.34,0.01,0.10,0.54,0.42
 Open spaces with no vegetation,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
 Inland wetlands,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00

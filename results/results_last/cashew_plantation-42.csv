@@ -1,7 +1,8 @@
-Class,Baseline,Latent Target,Hog Weighted,Feat Guided,Curriculum Ndi Sigmae,Curriculum Ndi,Baseline Full 200Ep,Baseline 200Ep,Segmentation Target,Curriculum Feat Unif,Glcm Loss
-Well-managed plantation,51.55,36.96,53.70,54.33,54.23,54.35,53.81,54.43,52.72,53.63,55.27
-Poorly-managed plantation,72.73,66.24,72.77,72.28,73.78,73.16,72.73,72.48,71.92,72.85,73.17
-Non-plantation,61.47,51.52,62.30,59.68,62.86,60.93,58.22,61.70,62.43,61.68,62.99
-Residential,87.75,80.03,88.17,86.38,87.37,87.97,88.69,86.03,87.57,86.50,88.40
-Background_cashew,79.16,75.68,79.31,78.67,79.42,79.16,78.66,79.06,79.01,79.01,79.56
-Uncertain,2.65,0.55,11.63,7.21,10.61,13.89,2.69,4.48,1.85,12.82,2.65
+,baseline,,,masking,,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Ndi,Curriculum Ndi Sigmae,Latent Target,Feat Guided,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif
+Well-managed plantation,51.55,54.43,53.81,54.35,54.23,36.96,54.33,52.72,53.70,55.27,53.63
+Poorly-managed plantation,72.73,72.48,72.73,73.16,73.78,66.24,72.28,71.92,72.77,73.17,72.85
+Non-plantation,61.47,61.70,58.22,60.93,62.86,51.52,59.68,62.43,62.30,62.99,61.68
+Residential,87.75,86.03,88.69,87.97,87.37,80.03,86.38,87.57,88.17,88.40,86.50
+Background_cashew,79.16,79.06,78.66,79.16,79.42,75.68,78.67,79.01,79.31,79.56,79.01
+Uncertain,2.65,4.48,2.69,13.89,10.61,0.55,7.21,1.85,11.63,2.65,12.82

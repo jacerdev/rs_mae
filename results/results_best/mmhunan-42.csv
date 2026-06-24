@@ -1,8 +1,9 @@
-Class,Baseline,Latent Target,Feat Guided,Hog Weighted,Curriculum Ndi Sigmae,Curriculum Ndi,Baseline 200Ep,Baseline Full 200Ep,Segmentation Target,Curriculum Feat Unif,Glcm Loss
-Cropland,76.36,74.84,76.90,77.29,77.01,76.79,76.92,76.66,75.75,76.82,76.84
-Forest,87.18,87.60,87.92,87.53,87.19,87.07,87.31,87.05,87.62,87.52,87.62
-Grassland,24.21,25.27,26.74,26.48,23.84,23.36,21.76,21.85,37.77,26.78,24.00
-Wetland,32.12,22.68,40.91,36.15,39.76,36.70,38.85,36.58,37.26,37.22,34.10
-Water,86.31,85.72,87.05,87.53,87.32,86.28,86.26,86.33,87.15,87.10,86.59
-Unused land,39.39,34.36,41.84,39.84,40.04,37.58,38.79,39.08,35.68,40.16,36.32
-Built-up area,75.73,73.97,75.81,75.91,75.78,75.81,76.14,76.23,74.97,75.24,75.79
+,baseline,,,masking,,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Ndi,Curriculum Ndi Sigmae,Latent Target,Feat Guided,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif
+Cropland,76.36,76.92,76.66,76.79,77.01,74.84,76.90,75.75,77.29,76.84,76.82
+Forest,87.18,87.31,87.05,87.07,87.19,87.60,87.92,87.62,87.53,87.62,87.52
+Grassland,24.21,21.76,21.85,23.36,23.84,25.27,26.74,37.77,26.48,24.00,26.78
+Wetland,32.12,38.85,36.58,36.70,39.76,22.68,40.91,37.26,36.15,34.10,37.22
+Water,86.31,86.26,86.33,86.28,87.32,85.72,87.05,87.15,87.53,86.59,87.10
+Unused land,39.39,38.79,39.08,37.58,40.04,34.36,41.84,35.68,39.84,36.32,40.16
+Built-up area,75.73,76.14,76.23,75.81,75.78,73.97,75.81,74.97,75.91,75.79,75.24

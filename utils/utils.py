@@ -1,4 +1,6 @@
+import csv
 import fcntl
+from io import StringIO
 import json
 import logging
 import os
@@ -113,7 +115,7 @@ def log_run_to_json(experiment_name, seed, dataset_name, run_name, run_id, json_
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
 
-def log_results(results, dataset_name, experiment_name, csv_path="results.csv"):
+def log_results(results, dataset_name, experiment_name, csv_path="results.csv", group=None):
     """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
     experiment_col = experiment_name.replace("_", " ").title().strip()
 
@@ -126,19 +128,48 @@ def log_results(results, dataset_name, experiment_name, csv_path="results.csv"):
             f.seek(0)
             content = f.read()
             if content:
-                from io import StringIO
-                df = pd.read_csv(StringIO(content), dtype=str)
+                df_raw = pd.read_csv(StringIO(content), header=None, dtype=str, keep_default_na=False)
+                top_row = df_raw.iloc[0].tolist()
+                columns = [str(c).strip() for c in df_raw.iloc[1].tolist()]
+                df = df_raw.iloc[2:].copy()
+                df.columns = columns
             else:
-                df = pd.DataFrame(columns=["Dataset", "Metric"])
+                top_row = ["", ""]
+                columns = ["Dataset", "Metric"]
+                df = pd.DataFrame(columns=columns)
 
             # normalize
             df = df.astype(object)
             df["Dataset"] = df["Dataset"].astype(str).str.strip().replace(r"^\s*$", pd.NA, regex=True).ffill()
             df["Metric"] = df["Metric"].astype(str).str.strip()
 
+            full_groups = []
+            current_g = ""
+            for g in top_row:
+                g_str = str(g).strip()
+                if g_str != "":
+                    current_g = g_str
+                full_groups.append(current_g)
+
             # ensure column exists
             if experiment_col not in df.columns:
                 df[experiment_col] = None
+                
+                if group:
+                    group = str(group).lower().strip()
+                    if group in full_groups:
+                        last_idx = len(full_groups) - 1 - full_groups[::-1].index(group)
+                        insert_idx = last_idx + 1
+                        columns.insert(insert_idx, experiment_col)
+                        full_groups.insert(insert_idx, group)
+                    else:
+                        columns.append(experiment_col)
+                        full_groups.append(group)
+                else:
+                    columns.append(experiment_col)
+                    full_groups.append("")
+                
+                df = df[columns]
 
             # insert / update
             for metric_name, val in results.items():
@@ -168,15 +199,34 @@ def log_results(results, dataset_name, experiment_name, csv_path="results.csv"):
             df_out["Dataset"] = df_out["Dataset"].where(
                 df_out["Dataset"] != df_out["Dataset"].shift(), "")
 
+            # rebuild top_row to ensure exact formatting
+            final_top_row = []
+            seen_groups = set()
+            for g in full_groups:
+                if g != "" and g not in seen_groups:
+                    final_top_row.append(g)
+                    seen_groups.add(g)
+                else:
+                    final_top_row.append("")
+
             f.seek(0)
             f.truncate()
-            df_out.to_csv(f, index=False, float_format="%.2f")
+            
+            writer = csv.writer(f)
+            writer.writerow(final_top_row)
+            writer.writerow(columns)
+            
+            # replace NaN with empty string
+            df_out = df_out.fillna("")
+            for _, row in df_out.iterrows():
+                writer.writerow(row.tolist())
+                
             f.flush()
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
-def log_per_class_results(results, experiment_name, csv_path="benchmark_per_class_results.csv"):
+def log_per_class_results(results, experiment_name, csv_path="benchmark_per_class_results.csv", group=None):
     """results: dict mapping class names to F1 values"""
     csv_path = Path(csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -187,18 +237,47 @@ def log_per_class_results(results, experiment_name, csv_path="benchmark_per_clas
             f.seek(0)
             content = f.read()
             if content:
-                from io import StringIO
-                df = pd.read_csv(StringIO(content), dtype=str)
+                df_raw = pd.read_csv(StringIO(content), header=None, dtype=str, keep_default_na=False)
+                top_row = df_raw.iloc[0].tolist()
+                columns = [str(c).strip() for c in df_raw.iloc[1].tolist()]
+                df = df_raw.iloc[2:].copy()
+                df.columns = columns
             else:
-                df = pd.DataFrame(columns=["Class"])
+                top_row = [""]
+                columns = ["Class"]
+                df = pd.DataFrame(columns=columns)
 
             df = df.astype(object)
             df["Class"] = df["Class"].astype(str).str.strip()
+            
+            full_groups = []
+            current_g = ""
+            for g in top_row:
+                g_str = str(g).strip()
+                if g_str != "":
+                    current_g = g_str
+                full_groups.append(current_g)
 
             experiment_col = experiment_name.replace("_", " ").title().strip()
 
             if experiment_col not in df.columns:
                 df[experiment_col] = None
+                
+                if group:
+                    group = str(group).lower().strip()
+                    if group in full_groups:
+                        last_idx = len(full_groups) - 1 - full_groups[::-1].index(group)
+                        insert_idx = last_idx + 1
+                        columns.insert(insert_idx, experiment_col)
+                        full_groups.insert(insert_idx, group)
+                    else:
+                        columns.append(experiment_col)
+                        full_groups.append(group)
+                else:
+                    columns.append(experiment_col)
+                    full_groups.append("")
+                
+                df = df[columns]
 
             for class_name, val in results.items():
                 class_name = str(class_name).strip()
@@ -213,9 +292,26 @@ def log_per_class_results(results, experiment_name, csv_path="benchmark_per_clas
                     }
                     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
+            final_top_row = []
+            seen_groups = set()
+            for g in full_groups:
+                if g != "" and g not in seen_groups:
+                    final_top_row.append(g)
+                    seen_groups.add(g)
+                else:
+                    final_top_row.append("")
+
             f.seek(0)
             f.truncate()
-            df.to_csv(f, index=False, float_format="%.2f")
+            
+            writer = csv.writer(f)
+            writer.writerow(final_top_row)
+            writer.writerow(columns)
+            
+            df = df.fillna("")
+            for _, row in df.iterrows():
+                writer.writerow(row.tolist())
+                
             f.flush()
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
