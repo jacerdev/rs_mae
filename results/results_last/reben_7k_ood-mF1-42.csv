@@ -1,21 +1,21 @@
-,baseline,,,masking,,target,,,loss,,combination
-Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Ndi,Curriculum Ndi Sigmae,Latent Target,Feat Guided,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif
-Urban fabric,66.13,67.35,69.33,66.61,67.12,67.27,68.71,72.71,67.36,69.02,72.44
-Industrial or commercial units,58.22,56.64,56.80,55.83,56.95,53.38,60.73,57.56,56.70,57.33,57.92
-Arable land,72.95,75.11,74.37,71.77,73.19,72.89,73.66,78.75,74.48,75.23,73.53
-Permanent crops,14.50,30.51,23.54,7.93,18.42,11.74,8.34,49.31,5.43,20.49,4.75
-Pastures,61.35,59.11,58.53,51.71,59.03,57.29,45.04,73.02,64.76,66.48,40.44
-Complex cultivation patterns,20.48,15.08,14.89,21.37,17.24,19.47,11.94,21.42,16.95,18.11,8.37
-"Land principally occupied by agriculture, with significant areas of natural vegetation",13.71,11.50,10.00,13.94,13.82,11.41,11.22,11.73,10.82,13.62,12.52
-Agro-forestry areas,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
-Broad-leaved forest,54.64,56.38,58.39,50.68,55.32,49.86,59.11,64.44,55.55,56.22,56.97
-Coniferous forest,62.61,63.08,62.20,60.64,61.63,64.64,59.13,75.75,60.45,61.59,64.63
-Mixed forest,28.49,31.38,25.83,28.74,35.29,32.37,31.76,50.11,28.83,27.01,38.59
-Natural grassland and sparsely vegetated areas,17.96,11.01,21.08,17.96,14.75,18.99,22.95,31.88,18.02,17.29,20.29
-"Moors, heathland and sclerophyllous vegetation",13.14,19.80,20.03,11.69,11.71,3.41,10.09,46.90,6.69,9.12,6.33
-"Transitional woodland, shrub",20.03,18.84,19.95,14.13,15.99,10.25,20.30,29.46,18.26,16.10,18.75
-"Beaches, dunes, sands",5.56,7.57,5.18,8.93,10.47,9.83,15.50,24.78,6.79,2.41,13.89
-Inland wetlands,33.58,34.35,37.87,29.81,35.15,23.78,32.71,27.73,40.65,34.53,30.77
-Coastal wetlands,33.01,20.32,16.00,21.15,19.04,41.81,28.09,19.75,20.03,28.47,14.78
-Inland waters,75.75,76.75,78.26,75.24,74.95,75.17,75.05,78.76,73.72,74.40,77.11
-Marine waters,98.40,98.47,98.47,98.54,98.37,98.80,98.23,97.40,98.43,98.40,98.30
+,baseline,,,masking,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Ndi,Latent Target,Feat Guided,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif
+Urban fabric,66.13,67.35,69.33,66.61,67.27,68.71,72.71,67.36,69.02,72.44
+Industrial or commercial units,58.22,56.64,56.80,55.83,53.38,60.73,57.56,56.70,57.33,57.92
+Arable land,72.95,75.11,74.37,71.77,72.89,73.66,78.75,74.48,75.23,73.53
+Permanent crops,14.50,30.51,23.54,7.93,11.74,8.34,49.31,5.43,20.49,4.75
+Pastures,61.35,59.11,58.53,51.71,57.29,45.04,73.02,64.76,66.48,40.44
+Complex cultivation patterns,20.48,15.08,14.89,21.37,19.47,11.94,21.42,16.95,18.11,8.37
+"Land principally occupied by agriculture, with significant areas of natural vegetation",13.71,11.50,10.00,13.94,11.41,11.22,11.73,10.82,13.62,12.52
+Agro-forestry areas,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+Broad-leaved forest,54.64,56.38,58.39,50.68,49.86,59.11,64.44,55.55,56.22,56.97
+Coniferous forest,62.61,63.08,62.20,60.64,64.64,59.13,75.75,60.45,61.59,64.63
+Mixed forest,28.49,31.38,25.83,28.74,32.37,31.76,50.11,28.83,27.01,38.59
+Natural grassland and sparsely vegetated areas,17.96,11.01,21.08,17.96,18.99,22.95,31.88,18.02,17.29,20.29
+"Moors, heathland and sclerophyllous vegetation",13.14,19.80,20.03,11.69,3.41,10.09,46.90,6.69,9.12,6.33
+"Transitional woodland, shrub",20.03,18.84,19.95,14.13,10.25,20.30,29.46,18.26,16.10,18.75
+"Beaches, dunes, sands",5.56,7.57,5.18,8.93,9.83,15.50,24.78,6.79,2.41,13.89
+Inland wetlands,33.58,34.35,37.87,29.81,23.78,32.71,27.73,40.65,34.53,30.77
+Coastal wetlands,33.01,20.32,16.00,21.15,41.81,28.09,19.75,20.03,28.47,14.78
+Inland waters,75.75,76.75,78.26,75.24,75.17,75.05,78.76,73.72,74.40,77.11
+Marine waters,98.40,98.47,98.47,98.54,98.80,98.23,97.40,98.43,98.40,98.30
