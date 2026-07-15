@@ -192,7 +192,7 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None, results_dir="log_resul
         log_results(results, display_dataset_name, cfg.experiment_name,
                     csv_path=f"{results_dir}{dummy}/benchmark_results-{cfg.seed}.csv")
         log_per_class_results(per_class_results, cfg.experiment_name,
-                              csv_path=f"{results_dir}{dummy}/{cfg.dataset_name}{split_suffix}-mF1-{cfg.seed}.csv")
+                              csv_path=f"{results_dir}{dummy}/{cfg.dataset_name}{split_suffix}-F1-{cfg.seed}.csv")
 
         # return all results
         split_prefix = f'{split_name}_' if split_name != 'test' else ''
