@@ -82,8 +82,9 @@ done
 
 datasets=("c2seg_augsburg" "mmhunan" "cashew_plantation" "reben_7k" "c2seg_beijing")
 
-# Loop over datasets with a 2-step jump for parallel finetuning
+# Loop over datasets
 for dataset in "${datasets[@]}"; do
+    # Loop over experiments with a 2-step jump for parallel pretraining
     for ((i=0; i<${#experiments[@]}; i+=2)); do
         exp1=${experiments[$i]}
         exp2=${experiments[$i+1]}

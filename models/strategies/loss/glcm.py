@@ -52,13 +52,8 @@ class DifferentiableGLCM(nn.Module):
         if str(chunk_size).lower() == 'auto' or chunk_size == -1:
             if x.device.type == 'cuda':
                 free_memory, _ = torch.cuda.mem_get_info(x.device)
-                # Memory overhead calculation:
-                # Even though a single 16x16 patch is tiny (~1 KB), computing its GLCM graph 
-                # requires saving intermediate probability maps (K=16 bins) and directional 
-                # slices for backpropagation. This expands the memory footprint to ~162 KB per patch.
-                # We reserve a safe 80% of available VRAM to determine the max chunk size.
+                # memory overhead calculation (we reserve a safe 80% of available VRAM to determine the max chunk size)
                 dynamic_chunk_size = int((free_memory * 0.8) / (162 * 1024))
-                # Ensure it's at least a reasonable minimum, and not larger than B
                 chunk_size = max(1024, min(B, dynamic_chunk_size))
             else:
                 chunk_size = 32768
@@ -80,40 +75,39 @@ class DifferentiableGLCM(nn.Module):
         B, H, W = x.shape
         K = self.bins
         
-        # 1. Compute probabilities for the ENTIRE patch ONCE (8x speedup!)
-        # _get_probabilities is a pointwise operation, so doing it before slicing is identical
+        # Compute probabilities for the enitre patch once
         x_flat = x.view(B, -1).unsqueeze(1) # (B, 1, H*W)
         P_flat = self._get_probabilities(x_flat) # (B, K, H*W)
         P = P_flat.view(B, K, H, W)
         
-        # 2. Slice the probability map for the 4 directions and compute histograms
-        # Horizontal
+        # Slice the probability map for the 4 directions and compute histograms
+        # horizontal
         P1_h = P[:, :, :, :-1].reshape(B, K, -1)
         P2_h = P[:, :, :, 1:].reshape(B, K, -1)
         H_h = torch.bmm(P1_h, P2_h.transpose(1, 2)) / max(1, P1_h.shape[-1])
         
-        # Vertical
+        # verticl
         P1_v = P[:, :, :-1, :].reshape(B, K, -1)
         P2_v = P[:, :, 1:, :].reshape(B, K, -1)
         H_v = torch.bmm(P1_v, P2_v.transpose(1, 2)) / max(1, P1_v.shape[-1])
         
-        # Diagonal 1
+        # diagonal
         P1_d1 = P[:, :, :-1, :-1].reshape(B, K, -1)
         P2_d1 = P[:, :, 1:, 1:].reshape(B, K, -1)
         H_d1 = torch.bmm(P1_d1, P2_d1.transpose(1, 2)) / max(1, P1_d1.shape[-1])
         
-        # Diagonal 2
+        # diagonal 2
         P1_d2 = P[:, :, 1:, :-1].reshape(B, K, -1)
         P2_d2 = P[:, :, :-1, 1:].reshape(B, K, -1)
         H_d2 = torch.bmm(P1_d2, P2_d2.transpose(1, 2)) / max(1, P1_d2.shape[-1])
         
-        # 3. Pool all directional pairs together
+        # pool all directional pairs together
         H_total = H_h + H_v + H_d1 + H_d2
         
-        # 4. Add transpose to enforce symmetry (counts reverse directions)
+        # add transpose to enforce symmetry (counts reverse directions)
         H_sym = (H_total + H_total.transpose(1, 2)) / 2.0
         
-        # Normalize back to 1.0 probability distribution
+        # normalize back to 1.0 probability distribution
         H_sym = H_sym / (H_sym.sum(dim=(1, 2), keepdim=True) + 1e-8)
         
         return H_sym

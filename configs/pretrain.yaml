@@ -72,7 +72,7 @@ dataset:
   split_file: "datasets/splits/reben.parquet"
   align_size: 120
   bands: ${bands}
-  normalize: false
+  normalize: false # performed inside the model forward pass
 
   val_to_train_frac: 0.85
   test_to_train_frac: 1.0
