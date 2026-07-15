@@ -53,7 +53,7 @@ class DifferentiableGLCM(nn.Module):
             if x.device.type == 'cuda':
                 free_memory, _ = torch.cuda.mem_get_info(x.device)
                 # Memory overhead calculation:
-                # Even though a single 16x16 patch is tiny (~1 KB), computing its GLCM graph 
+                # even though a single 16x16 patch is tiny (~1 KB), computing its GLCM graph 
                 # requires saving intermediate probability maps (K=16 bins) and directional 
                 # slices for backpropagation. This expands the memory footprint to ~162 KB per patch.
                 # We reserve a safe 80% of available VRAM to determine the max chunk size.
@@ -80,7 +80,7 @@ class DifferentiableGLCM(nn.Module):
         B, H, W = x.shape
         K = self.bins
         
-        # 1. Compute probabilities for the ENTIRE patch ONCE (8x speedup!)
+        # 1. Compute probabilities for the enitre patch once
         # _get_probabilities is a pointwise operation, so doing it before slicing is identical
         x_flat = x.view(B, -1).unsqueeze(1) # (B, 1, H*W)
         P_flat = self._get_probabilities(x_flat) # (B, K, H*W)
