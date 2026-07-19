@@ -1,6 +1,6 @@
 # @package _global_
 
-img_size: 224
+img_size: 256
 batch_size: 16
 num_classes: 13
 num_bands: 4
@@ -14,8 +14,7 @@ dataset:
   normalize: false
 
   grid_sampling: true
-  crop_size: 234 # ==> grid shift margin = (13474 - 234*57, 8706*0.85 - 31*234) = (136, 146)
+  crop_size: 256 # ==> grid shift margin = (13474 - 256*52, 8706*0.865 - 256*29) = (162, 106.69)
 
 dataset_name: "c2seg_${dataset.city}"
   
-

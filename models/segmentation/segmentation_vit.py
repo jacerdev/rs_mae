@@ -33,17 +33,37 @@ class MAEPyramidEncoder(nn.Module):
         # SMP interface
         self._out_channels = [mae_kwargs["in_chans"]] + [self.embed_dim]*4
 
-        # Rescale modules to build a 4-level pyramid: [H/2, H/4, H/8, H/16]
-        # Scales [4,2,1,0.5] are patch_size-agnostic: for any patch size the native token grid
-        # The segmentation head compensates with patch_size//4 to reach full resolution.
-        # ViT-Adapter baseline: pure interpolation + norm (https://arxiv.org/abs/2205.08534)
-        self.res_adapters = nn.ModuleList([
-            nn.Sequential(
-                nn.Upsample(scale_factor=s, mode='bilinear', align_corners=False),
-                nn.BatchNorm2d(self.embed_dim)
-            )
-            for s in [4.0, 2.0, 1.0, 0.5] # standard is scales=[patch_size / s for s in [4, 8, 16, 32]]  # example p16 -> [4,2,1,0.5], p8 ->[2,1,0.5,0.25]
-        ])
+        # rescale modules following Li et al. (2021b): exact ops per scale to produce
+        # standard 1/4, 1/8, 1/16, 1/32 pyramid. Scale is patch_size-dependent:
+        scales = [mae_kwargs['patch_size'] / s for s in [4.0, 8.0, 16.0, 32.0]]
+
+        def _make_adapter(scale):
+            D = self.embed_dim
+            if scale >= 4.0: # not used for p=8
+                return nn.Sequential(
+                    nn.ConvTranspose2d(D, D, kernel_size=2, stride=2),
+                    nn.GroupNorm(32, D),
+                    nn.GELU(),
+                    nn.ConvTranspose2d(D, D, kernel_size=2, stride=2),
+                )
+            elif scale == 2.0:
+                return nn.ConvTranspose2d(D, D, kernel_size=2, stride=2)
+            elif scale == 1.0:
+                return nn.Identity()
+            elif scale == 0.5:
+                return nn.MaxPool2d(kernel_size=2, stride=2)
+            else:
+                # scale < 0.5 (e.g. 0.25 for p=8 last block): conv downsample then maxpool
+                # It is not established in the literature how to downsample by 4x, as the baseline only downsamples by 2x using max pooling.
+                # We custom-design this 4x downsampling by combining a stride-2 convolution with the literature's standard max pooling.
+                return nn.Sequential(
+                    nn.Conv2d(D, D, kernel_size=2, stride=2),
+                    nn.GroupNorm(32, D),
+                    nn.GELU(),
+                    nn.MaxPool2d(kernel_size=2, stride=2)
+                )
+
+        self.res_adapters = nn.ModuleList([_make_adapter(s) for s in scales])
 
     @property
     def out_channels(self):
@@ -109,7 +129,7 @@ class SegmentationViT(SegmentationModel):
             out_channels=num_classes,
             activation=None,
             kernel_size=3,
-            upsampling=mae_kwargs['patch_size'] // 4 # FPN output is of scale patch_size/4 scale
+            upsampling=4  # FPN P2 is always at H/4 resolution
         )
         logging.debug(f"Segmentation head params: {sum(p.numel() for p in self.segmentation_head.parameters()) / 1e6} M")
         
