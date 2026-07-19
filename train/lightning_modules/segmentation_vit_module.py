@@ -208,7 +208,7 @@ def get_parameter_groups_llrd(model, weight_decay, backbone_lr, decoder_lr, laye
 
         # adapter layers
         elif param_name.startswith("encoder.res_adapters."):
-            param_lr = backbone_lr
+            param_lr = decoder_lr
             group_name = f"{group_type}_res_adapters"
 
         # decoder layers
