@@ -1,0 +1,8 @@
+,baseline,,,masking,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Ndi,Latent Target,Feat Guided,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif
+Well-managed plantation,35.75,37.21,37.55,36.93,22.92,37.24,35.96,36.86,38.01,36.45
+Poorly-managed plantation,56.59,56.65,57.05,57.23,49.30,56.45,56.18,56.80,57.38,57.17
+Non-plantation,44.71,45.39,40.62,44.26,36.19,42.16,44.75,46.00,46.69,44.33
+Residential,78.13,75.35,79.61,78.32,67.35,76.10,77.76,78.97,79.39,76.41
+Background_cashew,65.49,65.30,64.89,65.47,60.78,64.91,65.21,65.66,65.93,65.34
+Uncertain,2.42,3.81,1.33,9.67,0.13,4.33,1.14,8.98,2.91,6.96

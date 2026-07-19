@@ -1,0 +1,9 @@
+,baseline,,,masking,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Ndi,Latent Target,Feat Guided,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif
+Cropland,62.11,62.91,62.35,62.65,60.06,62.80,60.99,63.19,62.58,62.76
+Forest,77.35,77.57,77.12,77.21,78.21,78.59,77.75,77.79,78.02,78.03
+Grassland,14.19,12.44,12.57,13.19,14.69,14.21,23.17,13.65,14.02,14.23
+Wetland,20.28,25.94,23.63,23.58,12.75,26.43,22.78,22.16,21.29,24.08
+Water,77.45,77.76,77.54,77.07,76.44,77.89,78.24,78.24,77.90,77.42
+Unused land,24.16,24.15,23.33,22.77,20.79,23.64,24.80,23.17,21.79,23.98
+Built-up area,61.08,61.56,61.62,61.08,58.73,61.21,60.31,61.32,61.04,60.67

@@ -33,25 +33,16 @@ class MAEPyramidEncoder(nn.Module):
         # SMP interface
         self._out_channels = [mae_kwargs["in_chans"]] + [self.embed_dim]*4
 
-        # Rescale modules to create a 1/2, 1/4, 1/8, 1/16 pyramid
-        # ViT-Adapter's pure interpolation and norm from "Vision Transformer Adapter for Dense Predictions" (https://arxiv.org/abs/2205.08534)
+        # Rescale modules to build a 4-level pyramid: [H/2, H/4, H/8, H/16]
+        # Scales [4,2,1,0.5] are patch_size-agnostic: for any patch size the native token grid
+        # The segmentation head compensates with patch_size//4 to reach full resolution.
+        # ViT-Adapter baseline: pure interpolation + norm (https://arxiv.org/abs/2205.08534)
         self.res_adapters = nn.ModuleList([
-            nn.Sequential( # 14x14 -> 56x56
-                nn.Upsample(scale_factor=4.0, mode='bilinear', align_corners=False),
-                nn.BatchNorm2d(self.embed_dim)
-            ),
-            nn.Sequential( # 14x14 -> 28x28
-                nn.Upsample(scale_factor=2.0, mode='bilinear', align_corners=False),
-                nn.BatchNorm2d(self.embed_dim)
-            ),
-            nn.Sequential( # 14x14
-                nn.Identity(),
-                nn.BatchNorm2d(self.embed_dim)
-            ),
-            nn.Sequential( # 14x14 -> 7x7
-                nn.Upsample(scale_factor=0.5, mode='bilinear', align_corners=False),
+            nn.Sequential(
+                nn.Upsample(scale_factor=s, mode='bilinear', align_corners=False),
                 nn.BatchNorm2d(self.embed_dim)
             )
+            for s in [4.0, 2.0, 1.0, 0.5] # standard is scales=[patch_size / s for s in [4, 8, 16, 32]]  # example p16 -> [4,2,1,0.5], p8 ->[2,1,0.5,0.25]
         ])
 
     @property

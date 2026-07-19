@@ -123,7 +123,7 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None, results_dir="log_resul
         # Metrics
         loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
         acc  = MulticlassAccuracy(num_classes=cfg.num_classes, ignore_index=-1, average='micro').to(device)
-        iou  = JaccardIndex(task="multiclass", num_classes=cfg.num_classes, ignore_index=-1, average='macro').to(device)
+        iou  = JaccardIndex(task="multiclass", num_classes=cfg.num_classes, ignore_index=-1, average='none').to(device)
         f1   = F1Score(task="multiclass", num_classes=cfg.num_classes, ignore_index=-1, average='none').to(device)
 
         total_loss = 0.0
@@ -171,19 +171,19 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None, results_dir="log_resul
                                                                 bands=dataset_cfg.bands, dataset_name=cfg.dataset_name)
                     plot_images(torch.stack([imgs_vis, gt_vis, pred_vis], dim=1).flatten(0,1), ncols=3)
                 
-        f1_per_class = f1.compute()
+        iou_per_class = iou.compute()
 
         results = {f"loss": total_loss / len(test_loader),
                    f"OA": acc.compute().item(),
-                   f"mIoU": iou.compute().item(),
-                   f"mF1": f1_per_class.nanmean().item()}
+                   f"mIoU": iou_per_class.nanmean().item(),
+                   f"mF1": f1.compute().nanmean().item()}
 
 
         # per class results
         per_class_results = {}
-        for idx, f1_val in enumerate(f1_per_class):
+        for idx, iou_val in enumerate(iou_per_class):
             class_name = dataset_class.CLASSES.get(idx, f"Class {idx}")
-            per_class_results[class_name] = f1_val.item()
+            per_class_results[class_name] = iou_val.item()
 
         # log
         dummy = '_dummy' if cfg.get('is_dummy', False) else ''
@@ -192,12 +192,12 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None, results_dir="log_resul
         log_results(results, display_dataset_name, cfg.experiment_name,
                     csv_path=f"{results_dir}{dummy}/benchmark_results-{cfg.seed}.csv")
         log_per_class_results(per_class_results, cfg.experiment_name,
-                              csv_path=f"{results_dir}{dummy}/{cfg.dataset_name}{split_suffix}-F1-{cfg.seed}.csv")
+                              csv_path=f"{results_dir}{dummy}/{cfg.dataset_name}{split_suffix}-IoU-{cfg.seed}.csv")
 
         # return all results
         split_prefix = f'{split_name}_' if split_name != 'test' else ''
         all_results.update({f"{split_prefix}{k}": v for k, v in results.items()})
-        all_results.update({f"{split_prefix}F1 - {class_name}": val for class_name, val in per_class_results.items()})
+        all_results.update({f"{split_prefix}IoU - {class_name}": val for class_name, val in per_class_results.items()})
 
     return all_results
 

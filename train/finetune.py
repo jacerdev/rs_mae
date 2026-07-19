@@ -36,14 +36,16 @@ def main(cfg: DictConfig):
         id=cfg.wandb.run_id,
         resume="allow" if cfg.wandb.run_id else None)
     
-    log_run_to_json(
-        experiment_name=cfg.experiment_name,
-        seed=cfg.seed,
-        dataset_name=cfg.dataset_name,
-        run_name=cfg.wandb.run_name, # or wandb_logger.experiment.name
-        run_id=wandb_logger.experiment.id,
-        json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "runs_dummy.json"
-    )
+    run_id = wandb_logger.experiment.id
+    if isinstance(run_id, str):
+        log_run_to_json(
+            experiment_name=cfg.experiment_name,
+            seed=cfg.seed,
+            dataset_name=cfg.dataset_name,
+            run_name=cfg.wandb.run_name, # or wandb_logger.experiment.name
+            run_id=run_id,
+            json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "runs_dummy.json"
+        )
 
     # Dataset
     train_transform = A.Compose([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=1.0),

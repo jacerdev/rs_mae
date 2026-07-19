@@ -16,12 +16,12 @@ loss:
   group_tokens: 2
   stride_tokens: 2
 
-  chunk_size: 'auto' # dynamically fills available VRAM
+  chunk_size: -1  # no chunking -- full M*C batch fits comfortably on A100 40GB
   bins: 16
-  min_val: -3.0 # assuming z normalized data
-  max_val: 3.0  #
-  bandwidth: null # Defaults to (max_val - min_val) / (2 * bins) to preserve gradient flow. e.g. 6.0 / (2 * 16) = 0.1875
-  
+  min_val: -3.0   # assuming z-normalized data
+  max_val: 3.0
+  bandwidth: null  # defaults to (max_val - min_val) / (2 * bins) = 6.0 / 32 = 0.1875
+
   alpha: 3e5
   warmup_start_epoch: 20
   warmup_epochs: 70

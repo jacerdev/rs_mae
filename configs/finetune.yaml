@@ -13,7 +13,7 @@ runs_json: "runs.json"
 # Training hyperparameters
 accumulate_grad_batches: 1
 max_epochs: 100
-early_stop_patience: 99
+early_stop_patience: 100
 base_lr: 1.5e-4
 warmup_frac: 0.05
 layer_lr_decay: 0.65

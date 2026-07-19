@@ -1,0 +1,15 @@
+,baseline,,,masking,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Ndi,Latent Target,Feat Guided,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif
+Surface water,32.42,31.29,32.00,33.94,26.35,29.09,26.87,31.68,33.64,31.39
+Street,2.07,1.98,1.66,2.37,0.80,2.77,1.35,1.47,1.45,4.29
+Urban Fabric,57.78,56.40,58.91,57.95,55.16,58.82,48.93,58.24,58.78,58.42
+"Industrial, commercial and transport",36.03,36.43,42.67,36.36,37.19,37.96,38.34,36.54,37.65,39.83
+"Mine, dump, and construction sites",12.78,17.62,11.50,12.86,5.39,10.07,10.69,11.55,13.82,8.05
+"Artificial, vegetated areas",19.89,20.99,20.50,19.21,19.95,18.18,19.11,21.20,19.98,19.45
+Arable Land,48.33,46.06,47.87,48.49,45.63,53.33,33.03,49.12,47.46,51.66
+Permanent Crops,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+Pastures,13.21,6.97,7.36,13.44,19.15,20.77,26.85,13.59,6.76,21.06
+Forests,63.08,63.15,62.81,61.81,58.38,61.92,61.75,63.57,61.85,58.81
+Shrub,0.01,0.12,0.16,0.07,0.00,0.17,0.01,0.05,0.27,0.21
+Open spaces with no vegetation,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+Inland wetlands,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
