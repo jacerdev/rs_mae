@@ -202,18 +202,17 @@ class NDISaliency(NDILayer):
 class DifferentiableGLCM(nn.Module):
     """
     Args:
-        bins (int): Number of gray-level bins (K).  Default: 32.
-        min_val (float): Lower clamp value of the input range.  Default: -3.0.
-        max_val (float): Upper clamp value of the input range.  Default:  3.0.
-        bandwidth (float | None): Sigmoid bandwidth.  Defaults to half the bin width.
+        bins (int): Number of gray-level bins (K). Default: 32.
+        min_val (float): Lower clamp value of the input range. Default: -3.0.
+        max_val (float): Upper clamp value of the input range. Default:  3.0.
+        bandwidth (float | None): Sigmoid bandwidth. Default: half the bin width.
 
     Input:
-        x (Tensor): shape ``(B, H, W)`` -- a batch of single-channel spatial patches.
-                    Values should lie within [min_val, max_val] (not enforced here;
-                    clamp beforehand if needed).
+        x (Tensor): (B, H, W), a batch of single-channel spatial patches.
+                    Values should lie within [min_val, max_val] (not enforced here)
 
     Output:
-        Tensor of shape ``(B, K, K)`` -- normalized, symmetric GLCM per sample.
+        Tensor of (B, K, K), normalized, symmetric GLCM per sample.
     """
 
     def __init__(self, bins=32, min_val=-3.0, max_val=3.0,
