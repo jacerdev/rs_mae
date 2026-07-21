@@ -201,12 +201,6 @@ class NDISaliency(NDILayer):
 
 class DifferentiableGLCM(nn.Module):
     """
-    Differentiable Gray Level Co-occurrence Matrix (GLCM) using Kernel Density Estimation.
-
-    Approximates a hard-binned GLCM with a soft, differentiable version via sigmoid-based
-    bin membership weights.  Computes an omni-directional (horizontal, vertical, and both
-    diagonals), symmetric GLCM so the result is rotation-invariant.
-
     Args:
         bins (int): Number of gray-level bins (K).  Default: 32.
         min_val (float): Lower clamp value of the input range.  Default: -3.0.
@@ -220,16 +214,10 @@ class DifferentiableGLCM(nn.Module):
 
     Output:
         Tensor of shape ``(B, K, K)`` -- normalized, symmetric GLCM per sample.
-
-    Example::
-
-        glcm = DifferentiableGLCM(bins=32, min_val=-3.0, max_val=3.0)
-        x = image[:, 0]   # single channel, shape (B, H, W)
-        H = glcm(x)       # (B, 32, 32)
     """
 
-    def __init__(self, bins: int = 32, min_val: float = -3.0, max_val: float = 3.0,
-                 bandwidth: float | None = None):
+    def __init__(self, bins=32, min_val=-3.0, max_val=3.0,
+                 bandwidth: float = None):
         super().__init__()
         self.bins    = bins
         self.min_val = min_val
@@ -241,16 +229,13 @@ class DifferentiableGLCM(nn.Module):
         centers = torch.linspace(min_val + self.L / 2, max_val - self.L / 2, bins)
         self.register_buffer("mu", centers.view(1, -1, 1))  # (1, K, 1)
 
-    def forward(self, x: torch.Tensor, chunk_size: int = 2048) -> torch.Tensor:
-        """
-        Args:
-            x (Tensor): ``(B, H, W)``
-            chunk_size (int): Max batch processed at once. Pass ``-1`` to disable chunking.
+    def forward(self, x, chunk_size=-1):
+        """ x (Tensor): (B, H, W)
+            chunk_size (int): max batch size (-1 disables chunking)
         Returns:
-            Tensor: ``(B, K, K)`` symmetric, normalized GLCM.
+            Tensor: (B, K, K) symmetric normalized GLCM
         """
         B = x.shape[0]
-        chunk_size = int(chunk_size) if chunk_size not in ('auto', -1) else 2048
 
         if chunk_size > 0 and B > chunk_size:
             return torch.cat(
@@ -259,8 +244,8 @@ class DifferentiableGLCM(nn.Module):
             )
         return self._forward_chunk(x)
 
-    def _soft_bins(self, x: torch.Tensor) -> torch.Tensor:
-        """Map pixel values to soft bin membership. x: (B,1,N) -> (B,K,N)"""
+    def _soft_bins(self, x):
+        """Map pixel values to soft bins. x: (B,1,N) -> (B,K,N)"""
         term1 = torch.sigmoid((x - self.mu + self.L / 2) / self.W)
         term2 = torch.sigmoid((x - self.mu - self.L / 2) / self.W)
         return term1 - term2
@@ -269,19 +254,17 @@ class DifferentiableGLCM(nn.Module):
         B, H, W = x.shape
         K = self.bins
 
-        # Soft bin probabilities for every pixel: (B, K, H, W)
         P = self._soft_bins(x.view(B, 1, H * W)).view(B, K, H, W)
 
-        # Collect co-occurring pixel pairs from all 4 directions in one tensor.
-        # This way we need only a single bmm instead of 4 separate launches.
-        P_left = torch.cat([
-            P[:, :, :,  :-1].reshape(B, K, -1),   # horizontal ->
-            P[:, :, :-1,  :].reshape(B, K, -1),   # vertical   v
-            P[:, :, :-1, :-1].reshape(B, K, -1),  # diagonal   down-right
-            P[:, :, 1:,  :-1].reshape(B, K, -1),  # diagonal   up-right
+        # collect co-occurring pixel pairs from all 4 directions in one tensor
+        P_left = torch.cat([ # bin probabilities for every source pixel
+            P[:, :, :,  :-1].reshape(B, K, -1),  # horizontal left
+            P[:, :, :-1,  :].reshape(B, K, -1),  # vertical   down
+            P[:, :, :-1, :-1].reshape(B, K, -1), # diagonal   down-right
+            P[:, :, 1:,  :-1].reshape(B, K, -1), # diagonal   up-right
         ], dim=2)
 
-        P_right = torch.cat([
+        P_right = torch.cat([ # bin probabilities for every neighbor pixel
             P[:, :, :,   1:].reshape(B, K, -1),
             P[:, :, 1:,   :].reshape(B, K, -1),
             P[:, :, 1:,  1:].reshape(B, K, -1),
@@ -293,7 +276,7 @@ class DifferentiableGLCM(nn.Module):
         # (B, K, N) x (B, N, K) -> (B, K, K)
         H_mat = torch.bmm(P_left, P_right.transpose(1, 2)) / max(1, N_total)
 
-        # Symmetrize and normalize to a probability distribution
+        # symmetrize and normalize to a probability distribution
         H_sym = (H_mat + H_mat.transpose(1, 2)) / 2.0
         H_sym = H_sym / (H_sym.sum(dim=(1, 2), keepdim=True) + 1e-8)
 

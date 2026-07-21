@@ -5,29 +5,16 @@ import torch.nn.functional as F
 
 from train.callbacks import TRAINING_STATE
 from models.strategies.loss.base import ReconstructionLoss
-from utils.features import DifferentiableGLCM  # noqa: F401 (re-exported for convenience)
+from utils.features import DifferentiableGLCM
 
 
 
 
 class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
-    """
-    Computes a combined GLCM and MSE loss for Masked Autoencoders over grouped tokens.
-    """
-    def __init__(self, 
-                 in_chans: int,
-                 patch_size: int,
-                 group_tokens: int = 3,
-                 stride_tokens: int = 2,
-                 bins: int = 32,
-                 min_val: float = -3.0,
-                 max_val: float = 3.0,
-                 bandwidth: float = None,
-                 chunk_size = 2048,
-                 alpha: float = 1.0,
-                 warmup_start_epoch: int = 0,
-                 warmup_epochs: int = 0,
-                 **kwargs):
+    """Computes a combined GLCM and MSE loss for Masked Autoencoders over grouped tokens"""
+    def __init__(self, in_chans, patch_size, group_tokens=3, stride_tokens=2,
+                 bins=32, min_val=-3.0, max_val=3.0, bandwidth=None, chunk_size=-1,
+                 alpha=1.0, warmup_start_epoch=0, warmup_epochs=0, **kwargs):
         nn.Module.__init__(self)
         ReconstructionLoss.__init__(self, **kwargs)
         
@@ -49,6 +36,7 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         loss_mse_full = loss_mse_full.mean(dim=-1)
         loss_mse = (loss_mse_full * mask).sum() / mask.sum().clamp(min=1)
         
+        # cosine warmup scaling
         if phase == "validation":
             scale = 1.0 
         else:
@@ -71,28 +59,28 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         p = self.patch_size
         C = self.in_chans
         
-        pred_img   = pred.view(B, S, S, C, p, p).permute(0, 3, 1, 4, 2, 5).reshape(B, C, S * p, S * p)
+        pred_img = pred.view(B, S, S, C, p, p).permute(0, 3, 1, 4, 2, 5).reshape(B, C, S * p, S * p)
         target_img = target.view(B, S, S, C, p, p).permute(0, 3, 1, 4, 2, 5).reshape(B, C, S * p, S * p)
         
         mask_grid = mask.view(B, 1, S, S).float()
         
-        block_mask     = F.max_pool2d(mask_grid, kernel_size=self.group_tokens, stride=self.stride_tokens) > 0
+        block_mask = F.max_pool2d(mask_grid, kernel_size=self.group_tokens, stride=self.stride_tokens) > 0
         block_mask_flat = block_mask.view(-1)
         
-        gp          = p * self.group_tokens
+        gp = p * self.group_tokens
         pixel_stride = p * self.stride_tokens
 
-        pred_blocks   = F.unfold(pred_img,   kernel_size=gp, stride=pixel_stride).transpose(1, 2).reshape(-1, C * gp * gp)
+        pred_blocks = F.unfold(pred_img,   kernel_size=gp, stride=pixel_stride).transpose(1, 2).reshape(-1, C * gp * gp)
         target_blocks = F.unfold(target_img, kernel_size=gp, stride=pixel_stride).transpose(1, 2).reshape(-1, C * gp * gp)
         
-        pred_m   = pred_blocks[block_mask_flat]
+        pred_m = pred_blocks[block_mask_flat]
         target_m = target_blocks[block_mask_flat]
         
         M = pred_m.shape[0]
         if M == 0:
             return loss_mse, {"mse_loss": loss_mse.detach(), "glcm_loss": torch.tensor(0.0, device=pred.device)}
         
-        # Fold channels into the batch dim: (M*C, gp, gp) — one GLCM call covers all channels.
+        # Fold channels into the batch dim: (M*C, gp, gp)
         pred_spatial   = pred_m.view(M * C, gp, gp)
         target_spatial = target_m.view(M * C, gp, gp)
 
@@ -114,7 +102,7 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         return total_loss, loss_components
 
     def get_texture_error_map(self, pred_img, target_img):
-        """Computes the spatial GLCM MSE error map between pred and target for non-overlapping windows."""
+        """computes the spatial GLCM MSE error map between pred and target for non-overlapping windows."""
         B, C, H, W = pred_img.shape
         gp = self.group_tokens * self.patch_size
 
@@ -124,9 +112,9 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         pred_blocks   = pred_img.unfold(2, gp, gp).unfold(3, gp, gp)   # (B, C, nH, nW, gp, gp)
         target_blocks = target_img.unfold(2, gp, gp).unfold(3, gp, gp)
 
-        # Flatten windows and fold channels into batch: (B*N*C, gp, gp)
-        # unfold gives (B, C, nH, nW, gp, gp) → permute to (B, nH, nW, C, gp, gp) so
-        # the flat index order is [b, window, channel] — matching the view(B, N, C) below.
+        # flatten windows and fold channels into batch: (B*N*C, gp, gp)
+        # unfold gives (B, C, nH, nW, gp, gp) -> permute to (B, nH, nW, C, gp, gp) so
+        # the flat index order is [b, window, channel], matching the view(B, N, C) below
         N = num_windows_h * num_windows_w
         pred_blocks   = pred_blocks.permute(0, 2, 3, 1, 4, 5).contiguous().view(B * N * C, gp, gp)
         target_blocks = target_blocks.permute(0, 2, 3, 1, 4, 5).contiguous().view(B * N * C, gp, gp)
@@ -137,12 +125,12 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         H_pred = self.glcm(pred_blocks,   chunk_size=self.chunk_size)  # (B*N*C, K, K)
         H_targ = self.glcm(target_blocks, chunk_size=self.chunk_size)
 
-        # MSE per window, averaged over channels: (B*N*C, K, K) → (B, N)
+        # MSE per window, averaged over channels: (B*N*C, K, K) -> (B, N)
         mse_per_patch = F.mse_loss(H_pred, H_targ, reduction='none').mean(dim=(1, 2))  # (B*N*C,)
         mse_per_patch = mse_per_patch.view(B, N, C).mean(dim=2)                        # (B, N) mean over C
         mse_grid = mse_per_patch.view(B, num_windows_h, num_windows_w)
 
-        # Interpolate up to full image size
+        # interpolate up to full image size
         error_map = F.interpolate(mse_grid.unsqueeze(1), size=(H, W), mode='nearest').squeeze(1)
 
         return error_map
