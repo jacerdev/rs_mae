@@ -16,7 +16,7 @@ loss:
   group_tokens: 2
   stride_tokens: 1
 
-  chunk_size: -1  # no chunking -- full M*C batch fits comfortably on A100 40GB
+  chunk_size: -1  # no chunking
   bins: 16
   min_val: -3.0   # assuming z-normalized data
   max_val: 3.0
