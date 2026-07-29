@@ -10,10 +10,11 @@ if [ -z "$TMUX" ]; then
 fi
 
 # import send_telegram
-source /home/users/j/jacer/projects/rs_mae/scripts/functions.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+source "$SCRIPT_DIR/functions.sh"
 
 SESSION_NAME=$(tmux display-message -p '#S' 2>/dev/null)
-SBATCH_SCRIPT="/home/users/j/jacer/projects/rs_mae/scripts/cluster_train.sh"
+SBATCH_SCRIPT="$SCRIPT_DIR/cluster_train.sh"
 
 # Extract values from SBATCH comments
 JOB_NAME=$(grep "#SBATCH --job-name=" "$SBATCH_SCRIPT" | awk -F'=' '{print $2}' | xargs)
@@ -28,13 +29,13 @@ MAIL_USER=$(grep "#SBATCH --mail-user=" "$SBATCH_SCRIPT" | awk -F'=' '{print $2}
 # Allocate resources
 SALLOC_CMD="salloc --job-name=$JOB_NAME --gres=$GRES --mem=$MEM --cpus-per-gpu=$CPUS --partition=$PART --time=$TIME --mail-type=$MAIL_TYPE --mail-user=$MAIL_USER"
 
-mkdir -p "/home/users/j/jacer/outputs/tmux/"
-tmux pipe-pane -o "stdbuf -o0 cat >> /home/users/j/jacer/outputs/tmux/$SESSION_NAME.tmux.out"
+mkdir -p "$HOME/outputs/tmux/"
+tmux pipe-pane -o "stdbuf -o0 cat >> $HOME/outputs/tmux/$SESSION_NAME.tmux.out"
 echo "Parsed SLURM requirements from $SBATCH_SCRIPT..."
 echo "⚙️ [$SESSION_NAME] executing: $SALLOC_CMD"
 
 $SALLOC_CMD bash -c "
-    source /home/users/j/jacer/projects/rs_mae/scripts/functions.sh
+    source \"$SCRIPT_DIR/functions.sh\"
     send_telegram \"📍 $SESSION_NAME: Node allocated for $TIME starting at \$(date '+%Y-%m-%d %H:%M:%S')\"
     
     # Exec into an interactive bash shell

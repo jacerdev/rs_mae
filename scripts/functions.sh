@@ -1,4 +1,4 @@
-SECRETS_PATH="/home/users/j/jacer/store/personal.env"
+SECRETS_PATH="$HOME/store/personal.env"
 
 get_value() {
     # usage: get_value "file_path" "var_name"
@@ -61,7 +61,7 @@ on_exit() {
     if [ "$exit_code" -eq 0 ]; then send_telegram "✅ Finished training successfully at $(date "+%Y-%m-%d %H:%M:%S")"
     else send_telegram "❌ Training failed (exit code $exit_code) on $(hostname) at $(date "+%Y-%m-%d %H:%M:%S")"
     fi
-    #rsync -av /scratch/jacer/outputs/ /home/users/j/jacer/outputs/
+    #rsync -av /scratch/$USER/outputs/ $HOME/outputs/
     #send_telegram "📁 Finished copying outputs to home directory"
     exit $exit_code
 }

@@ -4,6 +4,7 @@ from matplotlib.colors import to_rgb, hsv_to_rgb
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
+import textwrap
 import torch
 
 from datasets import ReBENDataset, BurnScarsDataset, Sen1Floods11Dataset, CashewPlantationDataset, C2SegDataset, MMHunanDataset
@@ -38,7 +39,7 @@ def quant_norm(data, lower_quant=0.01, upper_quant=0.99):
     return x if is_numpy else torch.from_numpy(x).to(data.device)
 
 def plot_images(imgs, ncols=None, title=None, img_titles=None, size=7, dataset_name=None):
-    """Plot a list of images. if image has 2 dims then it's treated as a segmentation mask"""
+    """Plot a list of images."""
     imgs = _ensure_batch(imgs)
     if ncols is None: ncols = math.ceil(math.sqrt(len(imgs)))
 
@@ -50,7 +51,13 @@ def plot_images(imgs, ncols=None, title=None, img_titles=None, size=7, dataset_n
         plt.subplot(nrows, ncols, i + 1)
         img = imgs[i]
 
-        if img.shape[-1] == 1: # if segmentation mask
+        is_mask = False
+        if img.shape[-1] == 1:
+            unique_vals = np.unique(img)
+            is_mask = not ((img.dtype.kind == 'f' and not np.allclose(img, np.round(img))) or \
+                           len(unique_vals) > 50 or unique_vals.max() > 50)
+            
+        if is_mask:
             plot_segmentation_mask(img, dataset_name=dataset_name)
         else:
             plt.imshow(img)
@@ -60,6 +67,26 @@ def plot_images(imgs, ncols=None, title=None, img_titles=None, size=7, dataset_n
     plt.tight_layout()
     if title is not None: plt.suptitle(title)
     plt.show()
+
+def get_id_to_class(dataset_name):
+    if dataset_name is None:
+        return {}
+    dataset_name = dataset_name.lower()
+    match dataset_name:
+        case "reben" | "reben_7k":
+            return ReBENDataset.CLASSES
+        case "burn_scars":
+            return BurnScarsDataset.CLASSES
+        case "sen1floods11":
+            return Sen1Floods11Dataset.CLASSES
+        case "cashew_plantation":
+            return CashewPlantationDataset.CLASSES
+        case "c2seg_augsburg" | "c2seg_berlin" | "c2seg_beijing" | "c2seg_wuhan":
+            return C2SegDataset.CLASSES
+        case "mmhunan":
+            return MMHunanDataset.CLASSES
+        case _:
+            raise ValueError(f"Unknown dataset: {dataset_name}")
 
 def get_color_tensor(dataset_name=None, max_id=None, cmap_name="tab20"):
     """Creates a tensor of shape (max_class_id + 2, 3) for efficient RGB masking"""
@@ -75,22 +102,7 @@ def get_color_tensor(dataset_name=None, max_id=None, cmap_name="tab20"):
             colors = cmap_source(np.linspace(0, 1, n))[:, :3]
         return torch.tensor(colors, dtype=torch.float32)
         
-    dataset_name = dataset_name.lower()
-    match dataset_name:
-        case "reben" | "reben_7k":
-            id_to_class = ReBENDataset.CLASSES
-        case "burn_scars":
-            id_to_class = BurnScarsDataset.CLASSES
-        case "sen1floods11":
-            id_to_class = Sen1Floods11Dataset.CLASSES
-        case "cashew_plantation":
-            id_to_class = CashewPlantationDataset.CLASSES
-        case "c2seg_augsburg" | "c2seg_berlin" | "c2seg_beijing" | "c2seg_wuhan":
-            id_to_class = C2SegDataset.CLASSES
-        case "mmhunan":
-            id_to_class = MMHunanDataset.CLASSES
-        case _:
-            raise ValueError(f"Unknown dataset: {dataset_name}")
+    id_to_class = get_id_to_class(dataset_name)
         
     valid_ids = list(id_to_class.keys())
     max_id = max(valid_ids)
@@ -116,7 +128,7 @@ def prepare_segmentation_visuals(imgs, masks, preds, bands=None, dataset_name=No
     imgs_vis = quant_norm(imgs[:, band_indices, :, :])
     
     # gt
-    gt_vis = color_tensor[masks].permute(0, 3, 1, 2) # (K, 3, H, W)
+    gt_vis = color_tensor[masks.long()].permute(0, 3, 1, 2) # (K, 3, H, W)
 
     # preds
     pred_classes = torch.argmax(preds, dim=1) # (B, H, W)
@@ -255,27 +267,38 @@ def _ensure_batch(img):
                     img[i] = img[i][..., None]
     return img
 
-def plot_segmentation_mask(mask, dataset_name=None):
+def plot_segmentation_mask(mask, dataset_name=None, legend_ax=None, wrap_width=25, show_legend=True):
     if isinstance(mask, torch.Tensor): 
-        mask = mask.cpu().float().numpy()
+        mask = mask.cpu().numpy()
 
-    mask = mask.squeeze()
+    mask = mask.squeeze().astype(int)
     unique_ids = np.unique(mask)
 
-    color_tensor = get_color_tensor(dataset_name=dataset_name, max_id=unique_ids.max())
-    id_to_color = {uid: tuple(color_tensor[uid].tolist()) for uid in unique_ids}
+    color_tensor = get_color_tensor(dataset_name=dataset_name, max_id=int(unique_ids.max()))
+    id_to_color = {int(uid): tuple(color_tensor[int(uid)].tolist()) for uid in unique_ids}
+
+    id_to_class = get_id_to_class(dataset_name)
 
     # mask is (H, W). color_tensor[mask] gives (H, W, 3) in [0, 1] range
     mask_tensor = torch.from_numpy(mask).long()
     rgb_mask = (color_tensor[mask_tensor].numpy() * 255).astype(np.uint8)
 
     # legend
-    patches = [mpatches.Patch(color=id_to_color[uid], label=f"{uid}")
-               for uid in id_to_color.keys()]
+    patches = []
+    for uid in id_to_color.keys():
+        raw_label = id_to_class.get(uid, f"{uid}")
+        wrapped_label = textwrap.fill(raw_label, width=wrap_width) if wrap_width else raw_label
+        patches.append(mpatches.Patch(color=id_to_color[uid], label=wrapped_label))
 
     plt.imshow(rgb_mask, interpolation="nearest")
-    plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.axis("off")
+
+    if show_legend:
+        if legend_ax is not None:
+            legend_ax.axis("off")
+            legend_ax.legend(handles=patches, loc='center left', bbox_to_anchor=(0, 0.5), frameon=False, fontsize=11)
+        else:
+            plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
 
 
 SEMANTIC_COLORS = {

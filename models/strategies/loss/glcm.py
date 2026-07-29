@@ -22,7 +22,7 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         self.in_chans = in_chans
         self.group_tokens = group_tokens
         self.stride_tokens = stride_tokens
-        self.chunk_size = chunk_size
+        self.chunk_size = -1 if str(chunk_size).lower() == "auto" else int(chunk_size)
         self.alpha = alpha
         self.warmup_start_epoch = warmup_start_epoch
         self.warmup_epochs = warmup_epochs
@@ -30,6 +30,7 @@ class MaskedGLCMLoss(nn.Module, ReconstructionLoss):
         self.glcm = DifferentiableGLCM(bins=bins, min_val=min_val, max_val=max_val, bandwidth=bandwidth)
         
     def __call__(self, pred, target, mask, phase="", **kwargs):
+        self.chunk_size = -1 if str(self.chunk_size).lower() == "auto" else int(self.chunk_size)
         B, L, D = pred.shape
         
         loss_mse_full = (pred - target) ** 2

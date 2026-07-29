@@ -7,18 +7,24 @@ from .data_loaders import load_reben_7k, load_burn_scars, load_sen1floods11, loa
 
 class SegmentationDataset(Dataset):
     """stochastic grid-sampling with a translational per-epoch offset (relies on current_epoch being updated at the start of each epoch)"""
-    def __init__(self, samples, masks, grid_sampling=True, crop_size=None, transform=None, normalize=False, bands=None, ids=None):
+    def __init__(self, samples, masks, grid_sampling=True, crop_size=None, min_margin=0, transform=None, normalize=False, bands=None, ids=None):
         """
         samples (list or np.ndarray): Raw image array(s) (H, W, C).
         masks (list or np.ndarray): Raw mask array(s) (H, W).
-        ids (list): List of unique identifiers for each sample.
         grid_sampling: If True, enables stochastic grid cropping, otherwise return samples as is
         crop_size (int): Target crop dimensions.
+        min_margin (int): Minimum margin forced to exist to guarantee translation augmentation.
+        
+        Note on Agnosticism:
+        `normalize`, `bands`, and `ids` are specific to this thesis pipeline (relying on `ReBENDataset.BAND_STATS` 
+        and custom evaluation tracking). If porting this class to a standalone project, these three arguments 
+        and their associated logic (L#31 - L#33) can be safely deleted.
         """
         self.samples = samples
         self.masks = masks
         self.grid_sampling = grid_sampling
         self.transform = transform
+
         self.normalize = normalize
         self.ids = ids
         
@@ -27,20 +33,20 @@ class SegmentationDataset(Dataset):
             self.std = torch.tensor([ReBENDataset.BAND_STATS["std"][b] for b in bands], dtype=torch.float32).view(-1, 1, 1)
 
         if not self.grid_sampling:
-            self.crop_size = self.current_epoch = self.margin_y = self.margin_x = self.grid_coords = self.offsets = None
+            self.crop_size = self.min_margin = self.current_epoch = self.margin_y = self.margin_x = self.grid_coords = self.offsets = None
             return
 
         self.crop_size = crop_size
+        self.min_margin = min_margin
 
         # precalculate grid coordinates and margins
         H, W = self.samples[0].shape[:2]
-        max_y_crops = H // self.crop_size
-        max_x_crops = W // self.crop_size
-        # max_y_crops = (H - min_margin) // self.crop_size
-        # max_x_crops = (W - min_margin) // self.crop_size
         
-        self.margin_y = H - (max_y_crops * self.crop_size)
-        self.margin_x = W - (max_x_crops * self.crop_size)
+        max_y_crops = max(1, (H - self.min_margin) // self.crop_size)
+        max_x_crops = max(1, (W - self.min_margin) // self.crop_size)
+        
+        self.margin_y = max(0, H - (max_y_crops * self.crop_size))
+        self.margin_x = max(0, W - (max_x_crops * self.crop_size))
         
         # store the top-left anchor coords for every grid cell
         self.grid_coords = []

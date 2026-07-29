@@ -11,6 +11,16 @@ import sys
 
 ### hardcoded stuff ###
 
+def get_secret(var_name, file_path=Path.home() / "store/personal.env"):
+    try:
+        with open(file_path, "r") as f:
+            for line in f:
+                if line.startswith(f"{var_name}="):
+                    return line.strip().split("=", 1)[1].strip('"\'')
+    except FileNotFoundError:
+        pass
+    return None
+
 def get_checkpoints_dir(experiment_key, dataset_name, artifacts_dir, wandb_project="RS_MAE-Thesis", json_path="all_runs.json"):
     json_path = Path(json_path)
     json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -30,7 +40,8 @@ def get_checkpoints_dir(experiment_key, dataset_name, artifacts_dir, wandb_proje
     if not has_ckpts:
         logging.info(f"Checkpoint not found in {ckpt_dir}. Attempting to rsync from cluster...")
         
-        remote_path = f"jacer@gateway.hpc.tu-berlin.de:/scratch/jacer/outputs/training_out/{wandb_project}/{run_id}"
+        username = get_secret("USERNAME") or os.environ.get("USER", "someone")
+        remote_path = f"{username}@gateway.hpc.tu-berlin.de:/scratch/{username}/outputs/training_out/{wandb_project}/{run_id}"
         local_dest = Path(artifacts_dir) / wandb_project
         local_dest.mkdir(parents=True, exist_ok=True)
         try:
