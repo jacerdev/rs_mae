@@ -9,25 +9,25 @@
 ########SBATCH --nodelist=gpu026
 
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=aloui@campus.tu-berlin.de
-#SBATCH --output=/scratch/jacer/outputs/slurm/job-%j.slurm.out
-#SBATCH --chdir=/home/users/j/jacer/projects/rs_mae/
+#SBATCH --mail-user=your.email@example.com
+#SBATCH --output=/scratch/%u/outputs/slurm/job-%j.slurm.out
 
+cd "$HOME/projects/rs_mae/"
 
 # import SECRETS_PATH, get_value, send_telegram, on_exit
-source /home/users/j/jacer/projects/rs_mae/scripts/functions.sh
+source "$HOME/projects/rs_mae/scripts/functions.sh"
 
 trap on_exit EXIT TERM INT
-mkdir -p '/scratch/jacer/outputs/slurm/'
-mkdir -p '/scratch/jacer/outputs/training_out/' # Specified in configs/paths/cluster.yaml as wandb_outdir
+mkdir -p "/scratch/$USER/outputs/slurm/"
+mkdir -p "/scratch/$USER/outputs/training_out/" # Specified in configs/paths/cluster.yaml as wandb_outdir
 
 set -e # Strict processing instructions
 
 # Environment activation
-export MAMBA_EXE='/home/users/j/jacer/programs/micromamba'
-export MAMBA_ROOT_PREFIX='/home/users/j/jacer/.local/share/mamba'
+export MAMBA_EXE="$HOME/programs/micromamba"
+export MAMBA_ROOT_PREFIX="$HOME/.local/share/mamba"
 eval "$("$MAMBA_EXE" shell hook --shell bash)"
-micromamba activate /scratch/jacer/envs/rs_mae
+micromamba activate /scratch/$USER/envs/rs_mae
 
 # WandB
 export WANDB_API_KEY=$(get_value "$SECRETS_PATH" "WANDB_API_KEY")
@@ -55,7 +55,7 @@ done
 overrides="$@"
 
 # Force temporary files to be created on the scratch drive to prevent cross-device link errors
-export TMPDIR="/scratch/jacer/outputs/tmp"
+export TMPDIR="/scratch/$USER/outputs/tmp"
 mkdir -p $TMPDIR
 
 # Loop over experiments with a 2-step jump for parallel pretraining

@@ -28,4 +28,4 @@ dependencies:
   - segmentation-models-pytorch=0.3.4
   - tifffile=2026.2.24
 
-# micromamba create -f environment.yml -p /scratch/jacer/envs/rs_mae
+# micromamba create -f environment.yml -p /scratch/$USER/envs/rs_mae

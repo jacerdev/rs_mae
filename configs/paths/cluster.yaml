@@ -1,4 +1,4 @@
-prefix: "/scratch/jacer"
+prefix: "/scratch/${oc.env:USER}"
 
 reben_dir:             "${paths.prefix}/datasets/reben/BigEarthNet-S2_compressed_lmdb/"
 reben_keys:            "${paths.prefix}/datasets/reben/keys.pkl"

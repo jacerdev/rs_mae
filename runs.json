@@ -149,36 +149,6 @@
             "run_id": "a93kqc0d"
         }
     },
-    "curriculum_ndi_sigmae-42": {
-        "reben": {
-            "run_name": "curriculum_ndi_sigmae-05.26_15:31",
-            "run_id": "zd9a5byy"
-        },
-        "sen1floods11": {
-            "run_name": "curriculum_ndi_sigmae-sen1floods11-05.27_03:12",
-            "run_id": "515dafew"
-        },
-        "c2seg_augsburg": {
-            "run_name": "curriculum_ndi_sigmae-c2seg_augsburg-05.29_06:31",
-            "run_id": "1ylpw3fr"
-        },
-        "mmhunan": {
-            "run_name": "curriculum_ndi_sigmae-mmhunan-05.29_07:09",
-            "run_id": "nfbsd46k"
-        },
-        "cashew_plantation": {
-            "run_name": "curriculum_ndi_sigmae-cashew_plantation-05.29_09:07",
-            "run_id": "wrnshkov"
-        },
-        "reben_7k": {
-            "run_name": "curriculum_ndi_sigmae-reben_7k-05.29_12:04",
-            "run_id": "kmc4zry1"
-        },
-        "c2seg_beijing": {
-            "run_name": "curriculum_ndi_sigmae-c2seg_beijing-05.29_15:18",
-            "run_id": "q04b7vaj"
-        }
-    },
     "baseline_full_200ep-42": {
         "reben": {
             "run_name": "baseline_full_200ep-06.12_08:06",
@@ -307,6 +277,42 @@
         "c2seg_beijing": {
             "run_name": "curriculum_feat_unif-c2seg_beijing-06.17_21:32",
             "run_id": "8ncloxko"
+        }
+    },
+    "curriculum_ndi_sigmae-42": {
+        "reben": {
+            "run_name": "curriculum_ndi_sigmae-05.26_15:31",
+            "run_id": "zd9a5byy"
+        },
+        "sen1floods11": {
+            "run_name": "curriculum_ndi_sigmae-sen1floods11-05.27_03:12",
+            "run_id": "515dafew"
+        },
+        "c2seg_augsburg": {
+            "run_name": "curriculum_ndi_sigmae-c2seg_augsburg-05.29_06:31",
+            "run_id": "1ylpw3fr"
+        },
+        "mmhunan": {
+            "run_name": "curriculum_ndi_sigmae-mmhunan-05.29_07:09",
+            "run_id": "nfbsd46k"
+        },
+        "cashew_plantation": {
+            "run_name": "curriculum_ndi_sigmae-cashew_plantation-05.29_09:07",
+            "run_id": "wrnshkov"
+        },
+        "reben_7k": {
+            "run_name": "curriculum_ndi_sigmae-reben_7k-05.29_12:04",
+            "run_id": "kmc4zry1"
+        },
+        "c2seg_beijing": {
+            "run_name": "curriculum_ndi_sigmae-c2seg_beijing-05.29_15:18",
+            "run_id": "q04b7vaj"
+        }
+    },
+    "fourier_loss-42": {
+        "reben": {
+            "run_name": "fourier_loss-04.29_07:49",
+            "run_id": "6wl1q29v"
         }
     }
 }
