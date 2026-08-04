@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from .reben import ReBENDataset
 from .data_loaders import load_reben_7k, load_burn_scars, load_sen1floods11, load_cashew_plantation, load_c2seg, load_mmhunan
 
-class SegmentationDataset(Dataset):
+class StochasticGridDataset(Dataset):
     """stochastic grid-sampling with a translational per-epoch offset (relies on current_epoch being updated at the start of each epoch)"""
     def __init__(self, samples, masks, grid_sampling=True, crop_size=None, min_margin=0, transform=None, normalize=False, bands=None, ids=None):
         """
@@ -101,7 +101,7 @@ class SegmentationDataset(Dataset):
         
         return img, mask
 
-class ReBEN7kDataset(SegmentationDataset):
+class ReBEN7kDataset(StochasticGridDataset):
     CLASSES = ReBENDataset.CLASSES
     BANDS = ReBENDataset.BANDS
 
@@ -125,7 +125,7 @@ class ReBEN7kDataset(SegmentationDataset):
             ids=ids
         )
 
-class Sen1Floods11Dataset(SegmentationDataset):
+class Sen1Floods11Dataset(StochasticGridDataset):
     CLASSES = {
         -1: "Missing data",
         0: "No flood",
@@ -148,7 +148,7 @@ class Sen1Floods11Dataset(SegmentationDataset):
             ids=ids
         )
         
-class BurnScarsDataset(SegmentationDataset):
+class BurnScarsDataset(StochasticGridDataset):
     CLASSES = {
         -1: "Missing data",
         0: "Not burned",
@@ -170,7 +170,7 @@ class BurnScarsDataset(SegmentationDataset):
             ids=ids
         )
 
-class CashewPlantationDataset(SegmentationDataset):
+class CashewPlantationDataset(StochasticGridDataset):
     # https://torchgeo.readthedocs.io/en/v0.6.2/api/datasets.html?utm_source=chatgpt.com#benin-cashew-plantations
     CLASSES = {
         -1: "No data",
@@ -197,7 +197,7 @@ class CashewPlantationDataset(SegmentationDataset):
             ids=ids
         )
 
-class C2SegDataset(SegmentationDataset):
+class C2SegDataset(StochasticGridDataset):
     # https://openremotesensing.net/wp-content/uploads/2023/04/Datasets_and_Protocols_FINAL.pdf
     CLASSES = { # := originalmask - 1
         -1: "Background_c2seg",
@@ -232,7 +232,7 @@ class C2SegDataset(SegmentationDataset):
             ids=ids
         )
 
-class MMHunanDataset(SegmentationDataset):
+class MMHunanDataset(StochasticGridDataset):
     # https://github.com/LauraChow/HunanMultimodalDataset
     CLASSES = {
         -1: "Missing data",

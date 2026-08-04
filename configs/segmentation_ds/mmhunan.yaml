@@ -13,6 +13,7 @@ dataset:
 
   grid_sampling: false
   crop_size: null
+  min_margin: 0
 
 dataset_name: "mmhunan"
   

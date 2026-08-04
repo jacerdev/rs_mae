@@ -23,12 +23,13 @@ class ReBENDataset_Cfg:
     include_unlisted: bool
 
 @dataclass
-class SegmentationDataset_Cfg:
+class StochasticGridDataset_Cfg:
     grid_sampling: bool
     crop_size: int
+    min_margin: int
 
 @dataclass
-class ReBEN7kDataset_Cfg(SegmentationDataset_Cfg):
+class ReBEN7kDataset_Cfg(StochasticGridDataset_Cfg):
     data_dir: str
     keys_path: str
     split_file: str
@@ -37,34 +38,34 @@ class ReBEN7kDataset_Cfg(SegmentationDataset_Cfg):
     normalize: bool
 
 @dataclass
-class Sen1Floods11Dataset_Cfg(SegmentationDataset_Cfg):
+class Sen1Floods11Dataset_Cfg(StochasticGridDataset_Cfg):
     data_dir: str
     split_file: str
     bands: List[str]
     normalize: bool
 
 @dataclass
-class BurnScarsDataset_Cfg(SegmentationDataset_Cfg):
+class BurnScarsDataset_Cfg(StochasticGridDataset_Cfg):
     data_dir: str
     split_file: str
     bands: List[str]
     normalize: bool
 
 @dataclass
-class CashewPlantationDataset_Cfg(SegmentationDataset_Cfg):
+class CashewPlantationDataset_Cfg(StochasticGridDataset_Cfg):
     data_dir: str
     split_file: str
     bands: List[str]
     normalize: bool
 
 @dataclass
-class MMHunanDataset_Cfg(SegmentationDataset_Cfg):
+class MMHunanDataset_Cfg(StochasticGridDataset_Cfg):
     data_dir: str
     bands: List[str]
     normalize: bool
 
 @dataclass
-class C2SegDataset_Cfg(SegmentationDataset_Cfg):
+class C2SegDataset_Cfg(StochasticGridDataset_Cfg):
     data_dir: str
     city: str
     split_frac: float

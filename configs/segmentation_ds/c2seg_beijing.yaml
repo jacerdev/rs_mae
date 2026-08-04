@@ -15,6 +15,7 @@ dataset:
 
   grid_sampling: true
   crop_size: 234 # ==> grid shift margin = (13474 - 234*57, 8706*0.85 - 31*234) = (136, 146)
+  min_margin: 0
 
 dataset_name: "c2seg_${dataset.city}"
   
