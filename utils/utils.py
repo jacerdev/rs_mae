@@ -21,16 +21,19 @@ def get_secret(var_name, file_path=Path.home() / "store/personal.env"):
         pass
     return None
 
-def get_checkpoints_dir(experiment_key, dataset_name, artifacts_dir, wandb_project="RS_MAE-Thesis", json_path="all_runs.json"):
+def get_checkpoints_dir(experiment_key, dataset_name, artifacts_dir, wandb_project, json_path):
     json_path = Path(json_path)
     json_path.parent.mkdir(parents=True, exist_ok=True)
     
     with open(json_path, "r") as f:
         runs_data = json.load(f)
     
-    if dataset_name == "c2seg_wuhan": dataset_name = "c2seg_beijing"
-    elif dataset_name == "c2seg_berlin": dataset_name = "c2seg_augsburg"
-    run_id = runs_data.get(experiment_key, {}).get(dataset_name, {}).get("run_id")
+    dataset_entry = runs_data.get(experiment_key, {}).get(dataset_name)
+    
+    legacy_aliases = {"c2seg_ab": "c2seg_augsburg", "c2seg_bw": "c2seg_beijing", "c2seg_wuhan": "c2seg_beijing", "c2seg_berlin": "c2seg_augsburg"}
+    if not dataset_entry: dataset_entry = runs_data.get(experiment_key, {}).get(legacy_aliases[dataset_name])
+    
+    run_id = dataset_entry.get("run_id") if dataset_entry else None
     if not run_id:
         raise ValueError(f"Run ID not found for experiment_key='{experiment_key}', dataset_name='{dataset_name}' in {json_path}")
     
@@ -38,7 +41,8 @@ def get_checkpoints_dir(experiment_key, dataset_name, artifacts_dir, wandb_proje
    
     has_ckpts = any(ckpt_dir.glob("seg-*.ckpt")) or any(ckpt_dir.glob("mae-*.ckpt"))
     if not has_ckpts:
-        logging.info(f"Checkpoint not found in {ckpt_dir}. Attempting to rsync from cluster...")
+        # (`wandb_project` is 'RS_MAE-Thesis' for legacy S2 runs)
+        logging.info(f"Checkpoint not found in {ckpt_dir}. Attempting to rsync from cluster (project: '{wandb_project}')...")
         
         username = get_secret("USERNAME") or os.environ.get("USER", "someone")
         remote_path = f"{username}@gateway.hpc.tu-berlin.de:/scratch/{username}/outputs/training_out/{wandb_project}/{run_id}"
@@ -58,7 +62,7 @@ def get_checkpoints_dir(experiment_key, dataset_name, artifacts_dir, wandb_proje
                 raise FileNotFoundError(f"Could not find any valid checkpoints in {ckpt_dir} after rsync.")
             
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Could not retrieve checkpoints from cluster for run_id {run_id}. Error: {e}")
+            raise RuntimeError(f"Could not retrieve checkpoints from cluster for run_id '{run_id}' under project '{wandb_project}'. Error: {e}")
         
     return ckpt_dir
 
@@ -88,7 +92,7 @@ def find_best_ckpt(directory):
             
     return best_ckpt
 
-def log_run_to_json(experiment_name, seed, dataset_name, run_name, run_id, json_path="all_runs.json"):
+def log_run_to_json(experiment_name, seed, dataset_name, run_name, run_id, json_path):
     json_path = Path(json_path)
     json_path.parent.mkdir(parents=True, exist_ok=True)
     
@@ -126,7 +130,7 @@ def log_run_to_json(experiment_name, seed, dataset_name, run_name, run_id, json_
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
 
-def log_results(results, dataset_name, experiment_name, csv_path="results.csv", group=None):
+def log_results(results, dataset_name, experiment_name, csv_path, group=None):
     """results: dict like {"acc":0.59, "iou":0.38, "f1":0.53, "loss":...}"""
     experiment_col = experiment_name.replace("_", " ").title().strip()
 
@@ -237,7 +241,7 @@ def log_results(results, dataset_name, experiment_name, csv_path="results.csv", 
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
-def log_per_class_results(results, experiment_name, csv_path="benchmark_per_class_results.csv", group=None):
+def log_per_class_results(results, experiment_name, csv_path, group=None):
     """results: dict mapping class names to F1 values"""
     csv_path = Path(csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)

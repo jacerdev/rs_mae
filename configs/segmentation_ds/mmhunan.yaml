@@ -3,12 +3,22 @@
 img_size: 256
 batch_size: 16
 num_classes: 7
-num_bands: 10
+
+sensor_num_bands:
+  S1: 2
+  S2: 10
+sensor_bands:
+  S1: ["VH", "VV"]
+  S2: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+
+num_bands: ${sensor_num_bands.${sensor}}
 
 # Data
 dataset:
   data_dir: ${paths.mmhunan_dir}
-  bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+  split_file: "datasets/splits/mmhunan.csv"
+  sensor: ${sensor}
+  bands: ${sensor_bands.${sensor}}
   normalize: false
 
   grid_sampling: false

@@ -10,7 +10,7 @@ from .reben import ReBENDataset
 
 def load_reben_7k(data_dir, keys_path=None,
                   split_file=None, split=None,
-                  align_size=120, bands=None,
+                  align_size=120, sensor="S2", bands=None,
                   normalize=False):
     """Loads reben_7k dataset by wrapping ReBENDataset"""
     dataset = ReBENDataset(
@@ -19,6 +19,7 @@ def load_reben_7k(data_dir, keys_path=None,
         split_file=split_file,
         split=split,
         align_size=align_size,
+        sensor=sensor,
         bands=bands,
         normalize=normalize,
         transform=None,
@@ -45,74 +46,10 @@ def load_reben_7k(data_dir, keys_path=None,
         
     return samples, masks, dataset.keys
 
-def load_sen1floods11(data_dir, split_file, split, bands=None):
-    """Loads Sen1Floods11 dataset samples and masks into memory"""
-    IMAGE_SUFFIX = "_S2Hand"
-    LABEL_SUFFIX = "_LabelHand"
-    ID_LENGTH = 0 # filename has no prefix so we just slice to start
-    BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
-    
-    data_dir = Path(data_dir)
-    df = pd.read_csv(split_file)
-    split_ids = set(df[df['split'] == split]['patch_id'].tolist())
-    
-    img_paths, mask_paths = _get_matched_tifs(data_dir, split_ids, IMAGE_SUFFIX, LABEL_SUFFIX, ID_LENGTH)
-    
-    samples, masks, ids = [], [], []
-    for img_path, mask_path in zip(img_paths, mask_paths):
-        img = tifffile.imread(img_path)
-        mask = tifffile.imread(mask_path)
-
-        if split != "test" and np.mean(mask != -1) < .35: # ignore_index = -1
-            continue
-
-        # Sen1Floods11 stored as C, H, W (transpose to standard H, W, C)
-        img = img.transpose(1, 2, 0)
-        
-        img = _select_bands(img, BANDS, bands)
-        
-        samples.append(img)
-        masks.append(mask.astype(np.int8))
-        ids.append(img_path.stem)
-        
-    return samples, masks, ids
-
-def load_burn_scars(data_dir, split_file, split, bands=None):
-    """Loads Burn Scars dataset 512x512 samples and masks into memory"""
-    IMAGE_SUFFIX = ".4_merged"
-    LABEL_SUFFIX = ".4.mask"
-    ID_LENGTH = 17 # e.g. T10SEJ.2018220.v1
-    BANDS = ["B02", "B03", "B04", "B8A", "B11", "B12"]
-    
-    data_dir = Path(data_dir)
-    df = pd.read_csv(split_file)
-    split_ids = set(df[df['split'] == split]['patch_id'].tolist())
-    
-    img_paths, mask_paths = _get_matched_tifs(data_dir, split_ids, IMAGE_SUFFIX, LABEL_SUFFIX, ID_LENGTH)
-    
-    samples, masks, ids = [], [], []
-    for img_path, mask_path in zip(img_paths, mask_paths):
-        img = tifffile.imread(img_path)
-        mask = tifffile.imread(mask_path)
-
-        if split != "test" and np.mean(mask != -1) < .35: # ignore_index = -1
-            continue
-
-        # Burn scars natively sits in the 0-1 reflectance range
-        img = (img * 10000.0).astype(np.int16) # multiply by 10000 to align with reBEN's scale
-        
-        img = _select_bands(img, BANDS, bands)
-        
-        samples.append(img)
-        masks.append(mask.astype(np.int8))
-        ids.append(img_path.stem)
-        
-    return samples, masks, ids
-
-def load_cashew_plantation(data_dir, split_file, split, bands=None):
-    """Loads m-Cashew-Plantation dataset samples and masks into memory"""
-    BANDS = {'B01': 0, 'B02': 1, 'B03': 2, 'B04': 3, 'B05': 4, 'B06': 5, 'B07': 6, 'B08': 7,
-            'B8A': 8, 'B09': 9, 'B10': 12, 'B11': 10, 'B12': 11}
+def load_cashew_plantation(data_dir, split_file, split, sensor='S2', bands=None):
+    """Loads m-Cashew-Plantation (S2) / x-Cashew-Benin (S1, S2) samples and masks into memory.
+    The correct data_dir for the sensor is expected to be set in the config."""
+    BANDS = {'VH': 12, 'VV': 13} if sensor == 'S1' else {'B01': 0, 'B02': 1, 'B03': 2, 'B04': 3, 'B05': 4, 'B06': 5, 'B07': 6, 'B08': 7, 'B8A': 8, 'B09': 9, 'B11': 10, 'B12': 11}
     
     data_dir = Path(data_dir)
     df = pd.read_csv(split_file)
@@ -136,17 +73,28 @@ def load_cashew_plantation(data_dir, split_file, split, bands=None):
         if split != "test" and np.mean(mask != -1) < .35: # ignore_index = -1
             continue
         
+        if sensor == 'S1': image = np.nan_to_num(image, nan=0.0) # few NaN pixels in VV
+        
         samples.append(image)
         masks.append(mask.astype(np.int8))
         ids.append(patch_id)
         
     return samples, masks, ids
 
-def load_c2seg(data_dir, city, split, split_frac=.8, key='MSI', bands=None):
-    """Loads one key ('MSI', 'SAR') for one city (augsburg, berlin, beijing, wuhan) and its mask"""
-    BANDS = ["B02", "B03", "B04", "B08"]
+def load_c2seg(data_dir, split_file, split, sensor='S2', bands=None):
+    """Loads one modality ('S2'/'MSI', 'S1'/'SAR') for one city and its mask according to split specification"""
+    df = pd.read_csv(split_file)
+    row = df[df['split'] == split]
+    if row.empty:
+        raise ValueError(f"Split '{split}' not found in split file: {split_file}")
+    row = row.iloc[0]
+    city = row['city'].lower()
+    side = row.get('side', 'all')
+    frac = float(row.get('frac', 1.0))
+
+    key = 'SAR' if sensor == 'S1' else 'MSI'
+    BANDS = ["VH", "VV"] if sensor == 'S1' else ["B02", "B03", "B04", "B08"]
     data_dir = Path(data_dir)
-    city = city.lower()
     
     # German cities are saved with .mat format and scipy.io
     if city in ['augsburg', 'berlin']:
@@ -168,47 +116,53 @@ def load_c2seg(data_dir, city, split, split_frac=.8, key='MSI', bands=None):
     else:
         raise ValueError(f"Unknown city: {city}. Expected one of 'augsburg', 'berlin', 'beijing', 'wuhan'.")
 
-    if key == 'MSI':
+    if bands is not None:
         sample = _select_bands(sample, BANDS, bands)
     
-    sample = sample.astype(np.int16)
+    sample = sample.astype(np.float32 if sensor == 'S1' else np.int16)
     mask = (mask - 1).astype(np.int8) # decrement class ids by 1 to get ignore_index to -1
 
-    if city in ['beijing', 'wuhan']:
-        # train/validation split: split vertically
-        split_idx = int(sample.shape[1] * split_frac)
-        if split == 'train':
-            sample = sample[:, :split_idx]
-            mask = mask[:, :split_idx]
-        elif split == 'validation':
-            sample = sample[:, split_idx:]
-            mask = mask[:, split_idx:]
-    else: # augsburg, berlin
-        # train/validation split: split horizontally
-        split_idx = int(sample.shape[0] * (1-split_frac))
-        if split == 'train':
-            sample = sample[split_idx:, :]
-            mask = mask[split_idx:, :]
-        elif split == 'validation':
+    H, W = sample.shape[:2]
+    match side:
+        case 'north':
+            split_idx = int(H * frac)
             sample = sample[:split_idx, :]
             mask = mask[:split_idx, :]
+        case 'south':
+            split_idx = int(H * (1 - frac))
+            sample = sample[split_idx:, :]
+            mask = mask[split_idx:, :]
+        case 'west':
+            split_idx = int(W * frac)
+            sample = sample[:, :split_idx]
+            mask = mask[:, :split_idx]
+        case 'east':
+            split_idx = int(W * (1 - frac))
+            sample = sample[:, split_idx:]
+            mask = mask[:, split_idx:]
+        case 'all':
+            pass
+        case _:
+            raise ValueError(f"Unknown side: {side}. Expected one of 'north', 'south', 'east', 'west', 'all'.")
 
     return [sample], [mask], [city]
 
-def load_mmhunan(data_dir, split, bands=None):
+def load_mmhunan(data_dir, split_file, split, sensor='S2', bands=None):
     """Loads Hunan dataset samples and masks into memory"""
-    BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
+    sensor_folder = "s1" if sensor == "S1" else "s2"
+    BANDS = ["VH", "VV"] if sensor == "S1" else ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
     
-    data_dir = Path(data_dir) / split
-    s2_dir, lc_dir = data_dir / 's2', data_dir / 'lc'
+    data_dir = Path(data_dir)
+    df = pd.read_csv(split_file)
+    split_ids = df[df['split'] == split]['patch_id'].tolist()
     
     igbp2hunan = np.array([255, 0, 1, 2, 1, 3, 4, 6, 6, 5, 6, 7, 255])
     
     samples, masks, ids = [], [], []
-    for img_path in sorted(s2_dir.iterdir()):
-        basename = img_path.name
-        mask_path = lc_dir / basename.replace("s2_", "lc_", 1)
-        
+    for patch_id in split_ids:
+        img_path = data_dir / split / sensor_folder / f"{sensor_folder}_{patch_id}"
+        mask_path = data_dir / split / 'lc' / f"lc_{patch_id}"
+
         img = tifffile.imread(img_path)
         lc = tifffile.imread(mask_path)
         
@@ -220,8 +174,9 @@ def load_mmhunan(data_dir, split, bands=None):
         if split != "test" and np.mean(mask != -1) < .35: # ignore_index = -1
             continue
         
-        img = _select_bands(img, BANDS, bands)
-        img = img.astype(np.int16)
+        if bands is not None:
+            img = _select_bands(img, BANDS, bands)
+        img = img.astype(np.float32 if sensor == 'S1' else np.int16)
         
         samples.append(img)
         masks.append(mask)

@@ -124,7 +124,7 @@ class SegmentationViT(SegmentationModel):
         masks = self.segmentation_head(decoder_output)
         return masks
 
-def load_pretrained_encoder_weights(model, ckpt_path, bands): # model is a SegmentationViT
+def load_pretrained_encoder_weights(model, ckpt_path, bands, pretrained_model_bands): # model is a SegmentationViT
     logging.info(f"Loading pretrained MAE weights from {ckpt_path}")
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     state_dict = ckpt["state_dict"]
@@ -134,10 +134,9 @@ def load_pretrained_encoder_weights(model, ckpt_path, bands): # model is a Segme
                       if k.startswith("model.") and "pos_embed" not in k}
 
     # slice patch_embed.proj.weight to match the downstream model's expected bands
-    PRETRAINED_MODEL_BANDS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
-    if list(bands) != PRETRAINED_MODEL_BANDS:
-        if set(bands).issubset(PRETRAINED_MODEL_BANDS):
-            band_indices = [PRETRAINED_MODEL_BANDS.index(b) for b in bands]
+    if list(bands) != list(pretrained_model_bands):
+        if set(bands).issubset(pretrained_model_bands):
+            band_indices = [pretrained_model_bands.index(b) for b in bands]
             logging.info(f"Slicing patch_embed.proj.weight: {band_indices}")
             raw_state_dict["patch_embed.proj.weight"] = raw_state_dict["patch_embed.proj.weight"][:, band_indices, :, :]
         else:

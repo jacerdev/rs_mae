@@ -11,6 +11,7 @@ class ReBENDataset_Cfg:
     keys_path: str
     split_file: str
     align_size: int
+    sensor: str
     bands: List[str]
     normalize: bool
 
@@ -34,20 +35,7 @@ class ReBEN7kDataset_Cfg(StochasticGridDataset_Cfg):
     keys_path: str
     split_file: str
     align_size: int
-    bands: List[str]
-    normalize: bool
-
-@dataclass
-class Sen1Floods11Dataset_Cfg(StochasticGridDataset_Cfg):
-    data_dir: str
-    split_file: str
-    bands: List[str]
-    normalize: bool
-
-@dataclass
-class BurnScarsDataset_Cfg(StochasticGridDataset_Cfg):
-    data_dir: str
-    split_file: str
+    sensor: str
     bands: List[str]
     normalize: bool
 
@@ -55,20 +43,23 @@ class BurnScarsDataset_Cfg(StochasticGridDataset_Cfg):
 class CashewPlantationDataset_Cfg(StochasticGridDataset_Cfg):
     data_dir: str
     split_file: str
+    sensor: str
     bands: List[str]
     normalize: bool
 
 @dataclass
 class MMHunanDataset_Cfg(StochasticGridDataset_Cfg):
     data_dir: str
+    split_file: str
+    sensor: str
     bands: List[str]
     normalize: bool
 
 @dataclass
 class C2SegDataset_Cfg(StochasticGridDataset_Cfg):
     data_dir: str
-    city: str
-    split_frac: float
+    split_file: str
+    sensor: str
     bands: List[str]
     normalize: bool
 

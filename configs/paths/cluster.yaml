@@ -1,13 +1,12 @@
 prefix: "/scratch/${oc.env:USER}"
 
-reben_dir:             "${paths.prefix}/datasets/reben/BigEarthNet-S2_compressed_lmdb/"
-reben_keys:            "${paths.prefix}/datasets/reben/keys.pkl"
+reben_dir:             "${paths.prefix}/datasets/reben/BigEarthNet-${sensor}_lmdb/"
+reben_keys:            "${paths.prefix}/datasets/reben/keys-${sensor}.pkl"
 
-reben_7k_dir:          "${paths.prefix}/datasets/reben/reben_7k/"
-sen1floods11_dir:      "${paths.prefix}/datasets/sen1floods11/"
-cashew_plantation_dir: "${paths.prefix}/datasets/cashew_plantation/"
+reben_7k_dir:          "${paths.prefix}/datasets/reben/reben_7k-${sensor}/"
+cashew_plantation_dir: "${paths.prefix}/datasets/cashew_plantation/" # GEO-Bench: m-cashew-plantation
+cashew_benin_dir:      "${paths.prefix}/datasets/cashew_benin/" # GeoCrossBench Dataverse: x-cashew-benin
 c2seg_dir:             "${paths.prefix}/datasets/c2seg/"
-burn_scars_dir:        "${paths.prefix}/datasets/burn_scars/"
 mmhunan_dir:           "${paths.prefix}/datasets/mmhunan/"
 
 wandb_outdir:          "${paths.prefix}/outputs/training_out/"

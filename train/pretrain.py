@@ -38,7 +38,7 @@ def main(cfg: DictConfig):
             dataset_name="reben",
             run_name=cfg.wandb.run_name, # or wandb_logger.experiment.name
             run_id=run_id,
-            json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "runs_dummy.json"
+            json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "artifacts/runs_dummy.json"
         )
 
     # Experiment
@@ -139,7 +139,7 @@ def main(cfg: DictConfig):
         if init_ckpt_path and not resume_path:
             from models.backbones.mae_vit import load_pretrained_mae_weights
             logging.warning(f"=== LOADING weights from {init_ckpt_path} ===")
-            load_pretrained_mae_weights(model.model, init_ckpt_path, cfg.bands)
+            load_pretrained_mae_weights(model.model, init_ckpt_path, cfg.bands, cfg.bands)
         # XXX
 
         # re-seed before training to ensure deterministic sample order regardless of model initialization

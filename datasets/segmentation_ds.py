@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import Dataset
 
 from .reben import ReBENDataset
-from .data_loaders import load_reben_7k, load_burn_scars, load_sen1floods11, load_cashew_plantation, load_c2seg, load_mmhunan
+from .data_loaders import load_reben_7k, load_cashew_plantation, load_c2seg, load_mmhunan
 
 class StochasticGridDataset(Dataset):
     """stochastic grid-sampling with a translational per-epoch offset (relies on current_epoch being updated at the start of each epoch)"""
@@ -102,11 +102,12 @@ class StochasticGridDataset(Dataset):
         return img, mask
 
 class ReBEN7kDataset(StochasticGridDataset):
+    # https://bigearth.net/
+    # https://github.com/IBM/peft-geofm/tree/main/datasets_splits/reBEN/reBEN_7k
     CLASSES = ReBENDataset.CLASSES
-    BANDS = ReBENDataset.BANDS
 
     def __init__(self, data_dir, transform=None,
-                 crop_size=112, grid_sampling=True,
+                 crop_size=112, grid_sampling=True, min_margin=0,
                  **ReBENDataset_kwargs):
         
         normalize = ReBENDataset_kwargs["normalize"]
@@ -120,58 +121,16 @@ class ReBEN7kDataset(StochasticGridDataset):
             masks=masks,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
-            transform=transform,
-            normalize=normalize, bands=bands,
-            ids=ids
-        )
-
-class Sen1Floods11Dataset(StochasticGridDataset):
-    CLASSES = {
-        -1: "Missing data",
-        0: "No flood",
-        1: "Flood"
-    }
-    BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
-
-    def __init__(self, data_dir, split_file, split, bands=None, normalize=False, transform=None,
-                 crop_size=112, grid_sampling=True):
-        
-        samples, masks, ids = load_sen1floods11(data_dir, split_file, split, bands)
-
-        super().__init__(
-            samples=samples,
-            masks=masks,
-            grid_sampling=grid_sampling,
-            crop_size=crop_size,
-            transform=transform,
-            normalize=normalize, bands=bands,
-            ids=ids
-        )
-        
-class BurnScarsDataset(StochasticGridDataset):
-    CLASSES = {
-        -1: "Missing data",
-        0: "Not burned",
-        1: "Burn scar"
-    }
-    BANDS = ["B02", "B03", "B04", "B8A", "B11", "B12"]
-    def __init__(self, data_dir, split_file, split, bands=None, normalize=False, transform=None,
-                 crop_size=112, grid_sampling=True):
-        
-        samples, masks, ids = load_burn_scars(data_dir, split_file, split, bands)
-
-        super().__init__(
-            samples=samples,
-            masks=masks,
-            grid_sampling=grid_sampling,
-            crop_size=crop_size,
+            min_margin=min_margin,
             transform=transform,
             normalize=normalize, bands=bands,
             ids=ids
         )
 
 class CashewPlantationDataset(StochasticGridDataset):
-    # https://torchgeo.readthedocs.io/en/v0.6.2/api/datasets.html?utm_source=chatgpt.com#benin-cashew-plantations
+    # https://docs.torchgeo.org/en/v0.6.2/api/datasets.html#benin-cashew-plantations
+    # GEO-Bench: m-cashew-plantation (https://zenodo.org/records/8277066)
+    # GeoCrossBench Dataverse: x-cashew-benin (https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/83BCNJ) 
     CLASSES = {
         -1: "No data",
         0: "Well-managed plantation",
@@ -181,17 +140,18 @@ class CashewPlantationDataset(StochasticGridDataset):
         4: "Background_cashew",
         5: "Uncertain"
     }
-    BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
-    def __init__(self, data_dir, split_file, split, bands=None, normalize=False, transform=None,
-                 crop_size=112, grid_sampling=True):
+
+    def __init__(self, data_dir, split_file, split, sensor="S2", bands=None, normalize=False, transform=None,
+                 crop_size=112, grid_sampling=True, min_margin=0):
         
-        samples, masks, ids = load_cashew_plantation(data_dir, split_file, split, bands)
+        samples, masks, ids = load_cashew_plantation(data_dir, split_file, split, sensor=sensor, bands=bands)
 
         super().__init__(
             samples=samples,
             masks=masks,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
+            min_margin=min_margin,
             transform=transform,
             normalize=normalize, bands=bands,
             ids=ids
@@ -199,6 +159,7 @@ class CashewPlantationDataset(StochasticGridDataset):
 
 class C2SegDataset(StochasticGridDataset):
     # https://openremotesensing.net/wp-content/uploads/2023/04/Datasets_and_Protocols_FINAL.pdf
+    # https://github.com/danfenghong/RSE_Cross-city
     CLASSES = { # := originalmask - 1
         -1: "Background_c2seg",
         0: "Surface water",
@@ -215,18 +176,18 @@ class C2SegDataset(StochasticGridDataset):
         11: "Open spaces with no vegetation",
         12: "Inland wetlands",
     }
-    BANDS = ["B02", "B03", "B04", "B08"]
 
-    def __init__(self, data_dir, city, split, split_frac=.8, bands=None, normalize=False, transform=None,
-                 crop_size=112, grid_sampling=True):
+    def __init__(self, data_dir, split_file, split, sensor="S2", bands=None, normalize=False, transform=None,
+                 crop_size=112, grid_sampling=True, min_margin=0):
         
-        samples, masks, ids = load_c2seg(data_dir, city=city, split=split, split_frac=split_frac, key='MSI', bands=bands)
+        samples, masks, ids = load_c2seg(data_dir, split_file, split, sensor=sensor, bands=bands)
             
         super().__init__(
             samples=samples,
             masks=masks,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
+            min_margin=min_margin,
             transform=transform,
             normalize=normalize, bands=bands,
             ids=ids
@@ -244,18 +205,18 @@ class MMHunanDataset(StochasticGridDataset):
         5: "Unused land",
         6: "Built-up area"
     }
-    BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
 
-    def __init__(self, data_dir, split, bands=None, normalize=False, transform=None,
-                 crop_size=112, grid_sampling=True):
+    def __init__(self, data_dir, split_file, split, sensor="S2", bands=None, normalize=False, transform=None,
+                 crop_size=112, grid_sampling=True, min_margin=0):
         
-        samples, masks, ids = load_mmhunan(data_dir, split, bands)
+        samples, masks, ids = load_mmhunan(data_dir, split_file, split, sensor=sensor, bands=bands)
             
         super().__init__(
             samples=samples,
             masks=masks,
             grid_sampling=grid_sampling,
             crop_size=crop_size,
+            min_margin=min_margin,
             transform=transform,
             normalize=normalize, bands=bands,
             ids=ids

@@ -1,6 +1,12 @@
 # Global variables
-seed: 42
+seed: 1
+sensor: "S1"
 patch_size: 8 # img_size must be divisible by `2*patch_size` for the FPN segmentation head
+
+sensor_bands:
+  S1: ["VH", "VV"]
+  S2: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+pretrained_model_bands: ${sensor_bands.${sensor}}
 
 defaults:
   - _self_
@@ -8,7 +14,7 @@ defaults:
   - segmentation_ds: reben_7k
 
 experiment_name: "baseline"
-runs_json: "runs.json"
+runs_json: "artifacts/runs-${sensor}.json"
 
 # Training hyperparameters
 accumulate_grad_batches: 1
@@ -28,7 +34,7 @@ prefetch_factor: 4
 
 # Logging
 wandb:
-  project: "RS_MAE-Thesis"
+  project: "RS_MAE-Paper"
   run_name: "${experiment_name}-${dataset_name}-${now:%m.%d_%H:%M}"
   run_id: null
   outdir: ${paths.wandb_outdir}

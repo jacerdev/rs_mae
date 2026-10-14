@@ -80,7 +80,7 @@ for ((i=0; i<${#experiments[@]}; i+=2)); do
 done
 
 
-datasets=("c2seg_augsburg" "mmhunan" "cashew_plantation" "reben_7k" "c2seg_beijing")
+datasets=("c2seg_ab" "mmhunan" "cashew_plantation" "reben_7k" "c2seg_bw")
 
 # Loop over datasets
 for dataset in "${datasets[@]}"; do

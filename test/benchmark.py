@@ -12,9 +12,9 @@ from torch.utils.data import DataLoader
 from torchmetrics.classification import MulticlassAccuracy, JaccardIndex, F1Score
 from tqdm import tqdm
 
-from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset, MMHunanDataset
+from datasets import ReBEN7kDataset, C2SegDataset, CashewPlantationDataset, MMHunanDataset
 from models.segmentation.segmentation_vit import SegmentationViT
-from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg, MMHunanDataset_Cfg
+from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg, MMHunanDataset_Cfg
 from utils.spatial_ops import windowed_inference, windowed_evaluation
 from utils.utils import get_checkpoints_dir, find_best_ckpt, log_per_class_results, log_results
 from utils.visualization import plot_images, prepare_segmentation_visuals
@@ -32,14 +32,14 @@ class EvaluationDataset(torch.utils.data.Dataset):
         return self.ds.ids[idx], img, mask
 
 
-def run_benchmark(cfg: DictConfig, ckpt_path: str = None, results_dir="log_results"):
+def run_benchmark(cfg: DictConfig, ckpt_path, results_dir):
     if ckpt_path is None: # Offline run (local pc)
         batch_size = 16
         num_workers = 2
         prefetch_factor = 2
 
         exp_key = f"{cfg.experiment_name}-{cfg.seed}"
-        ckpt_dir = get_checkpoints_dir(exp_key, cfg.dataset_name, cfg.paths.artifacts_dir, wandb_project=cfg.wandb.project, json_path="runs_dummy.json" if cfg.get("is_dummy", False) else cfg.runs_json)
+        ckpt_dir = get_checkpoints_dir(exp_key, cfg.dataset_name, cfg.paths.artifacts_dir, wandb_project=cfg.wandb.project, json_path="artifacts/runs_dummy.json" if cfg.get("is_dummy", False) else cfg.runs_json)
         ckpt_path = find_best_ckpt(ckpt_dir)
         if not ckpt_path:
             raise FileNotFoundError(f"Could not find checkpoint in {ckpt_dir}")
@@ -61,13 +61,6 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None, results_dir="log_resul
             test_transform = A.Compose([A.PadIfNeeded(min_height=cfg.img_size, min_width=cfg.img_size,
                                          border_mode=cv2.BORDER_REFLECT), ToTensorV2()], seed=cfg.seed)
             splits_to_eval = ["test", "ood"]
-        case "burn_scars":
-            dataset_class = BurnScarsDataset
-            dataset_class_cfg = BurnScarsDataset_Cfg
-        case "sen1floods11":
-            dataset_class = Sen1Floods11Dataset
-            dataset_class_cfg = Sen1Floods11Dataset_Cfg
-            splits_to_eval = ["test", "bolivia"]
         case "cashew_plantation":
             dataset_class = CashewPlantationDataset
             dataset_class_cfg = CashewPlantationDataset_Cfg
@@ -77,8 +70,6 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None, results_dir="log_resul
         case name if name.startswith("c2seg"):
             dataset_class = C2SegDataset
             dataset_class_cfg = C2SegDataset_Cfg
-            if cfg.dataset_name == "c2seg_beijing": cfg.dataset_name, cfg.dataset.city = "c2seg_wuhan", "wuhan"
-            elif cfg.dataset_name == "c2seg_augsburg": cfg.dataset_name, cfg.dataset.city = "c2seg_berlin", "berlin"
         case _:
             raise ValueError(f"Unknown dataset name extracted from wandb.run_name: {cfg.dataset_name}")
 
@@ -139,16 +130,12 @@ def run_benchmark(cfg: DictConfig, ckpt_path: str = None, results_dir="log_resul
                 if H <= input_size and W <= input_size:
                     preds = model(imgs) # (B, C, H, W) on device
                 else:
-                    preds_list = []
-                    for sample in imgs:
-                        pred = windowed_inference(model=model, image=sample,
-                                                window_size=input_size,
-                                                stride=input_size // 2,
-                                                num_classes=cfg.num_classes,
-                                                batch_size=batch_size,
-                                                merger_device='cpu')
-                        preds_list.append(pred)
-                    preds = torch.stack(preds_list, dim=0) # (B, C, H, W) on CPU
+                    preds = windowed_inference(model=model, image=imgs,
+                                               window_size=input_size,
+                                               stride=input_size // 2,
+                                               num_classes=cfg.num_classes,
+                                               batch_size=batch_size,
+                                               merger_device='cpu') # (B, C, H, W) on CPU
 
                 # Evaluation
                 if H <= input_size and W <= input_size:

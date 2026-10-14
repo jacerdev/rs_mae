@@ -22,5 +22,3 @@ target:
 
 loss:
   _target_: models.strategies.loss.MaskedMSELoss
-
-use_last_ckpt: true

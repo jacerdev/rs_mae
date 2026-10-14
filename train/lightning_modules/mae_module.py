@@ -8,7 +8,7 @@ import torchvision.utils as vutils
 from models.backbones import MaskedAutoencoderViT
 from utils.config import MaskedAutoencoderViT_Cfg
 from utils.spatial_ops import unpatchify
-from utils.visualization import quant_norm, generate_hog_image, generate_saliency_grid
+from utils.visualization import quant_norm, generate_hog_image, generate_saliency_grid, sar_false_color
 
 
 REFERENCE_BATCH_SIZE = 256
@@ -121,9 +121,6 @@ class MAEModule(L.LightningModule):
         h, w = H // p, W // p
 
         mask_expanded = mask.reshape(num_samples, h, w).repeat_interleave(p, dim=1).repeat_interleave(p, dim=2).unsqueeze(1) # (num_samples, 1, H, W)
-        
-        # input (masked image)
-        masked_imgs = imgs * (1 - mask_expanded)
 
         # target
         target_out = self.model.target(imgs)
@@ -147,11 +144,22 @@ class MAEModule(L.LightningModule):
             recon_restored = imgs * (1 - mask_expanded) + recon_restored * mask_expanded
 
         # log
-        band_combinations = {"RGB": ["B04", "B03", "B02"], "NIR": ["B07", "B06", "B05"], "SWIR": ["B11"]*3}
-        band_indices = {name: [self.bands.index(b) for b in bands] for name, bands
-                        in band_combinations.items()} if self.bands is not None else {"":[0,1,2]}
+        if set(self.bands) == {"VV", "VH"}:
+            # false-colour [VV, VH, (VV+VH)/2]; downstream indexing then just takes channels 0,1,2
+            imgs, target, recon_raw = [sar_false_color(t, self.bands) for t in (imgs, target, recon_raw)]
+            if recon_restored is not None: recon_restored = sar_false_color(recon_restored, self.bands)
+            band_indices = {"SAR": [0, 1, 2]}
+        else:
+            band_combinations = {"RGB": ["B04", "B03", "B02"], "NIR": ["B07", "B06", "B05"], "SWIR": ["B11"]*3}
+            band_indices = {name: [self.bands.index(b) for b in bands] for name, bands
+                            in band_combinations.items()} if self.bands is not None else {"":[0,1,2]}
 
         for name, bands_idx in band_indices.items():
+            norm_imgs = quant_norm(imgs[:, bands_idx, :, :])
+
+            # input (masked image)
+            masked_imgs = norm_imgs * (1 - mask_expanded) + 0.5 * mask_expanded
+
             is_curriculum_masker = hasattr(self.model, "masker") and type(self.model.masker).__name__ == "CurriculumMasker"
             is_weighted_loss = hasattr(self.model, "loss") and type(self.model.loss).__name__ == "SaliencyWeightedLoss"
             is_glcm_loss = hasattr(self.model, "loss") and type(self.model.loss).__name__ == "MaskedGLCMLoss"
@@ -161,27 +169,27 @@ class MAEModule(L.LightningModule):
                 saliency = extractor(raw_imgs).detach()
                 saliency_grid_tensors = []
                 for i in range(num_samples):
-                    s_overlay = generate_saliency_grid(saliency[i], image=quant_norm(imgs[i:i+1, bands_idx, :, :])[0].permute(1, 2, 0).cpu().numpy())
+                    s_overlay = generate_saliency_grid(saliency[i], image=norm_imgs[i].permute(1, 2, 0).cpu().numpy())
                     saliency_grid_tensors.append(torch.from_numpy(s_overlay).float().permute(2, 0, 1) / 255.0)
 
-                rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
+                rows = [masked_imgs, # input
                         torch.stack(saliency_grid_tensors).to(imgs.device), # saliency grid
-                        quant_norm(imgs[:, bands_idx, :, :])] # unmasked input
+                        norm_imgs] # unmasked input
             elif is_glcm_loss:
                 error_map = self.model.loss.get_texture_error_map(recon_raw[:, bands_idx, :, :], target[:, bands_idx, :, :]).detach()
                 error_grid_tensors = []
                 for i in range(num_samples):
                     em = error_map[i]
                     em_norm = (em - em.min()) / (em.max() - em.min() + 1e-8)
-                    e_overlay = generate_saliency_grid(em_norm, image=quant_norm(imgs[i:i+1, bands_idx, :, :])[0].permute(1, 2, 0).cpu().numpy())
+                    e_overlay = generate_saliency_grid(em_norm, image=norm_imgs[i].permute(1, 2, 0).cpu().numpy())
                     error_grid_tensors.append(torch.from_numpy(e_overlay).float().permute(2, 0, 1) / 255.0)
 
-                rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
-                        quant_norm(imgs[:, bands_idx, :, :]), # unmasked input
+                rows = [masked_imgs, # input
+                        norm_imgs, # unmasked input
                         torch.stack(error_grid_tensors).to(imgs.device)] # GLCM error overlay
-            else:
-                rows = [quant_norm(masked_imgs[:, bands_idx, :, :]), # input
-                        quant_norm(imgs[:, bands_idx, :, :]), # unmasked input
+            else: # baseline
+                rows = [masked_imgs, # input
+                        norm_imgs, # unmasked input
                         quant_norm(target[:, bands_idx, :, :]), # target
                         quant_norm(recon_raw[:, bands_idx, :, :])] # output
             if recon_restored is not None:
@@ -237,7 +245,7 @@ class MAEModule(L.LightningModule):
                 
         # NDI
         imgs = quant_norm(imgs[:, band_indices, :, :])
-        combined = torch.cat([imgs * (1 - mask_expanded),
+        combined = torch.cat([imgs * (1 - mask_expanded) + 0.5 * mask_expanded,
                             imgs,
                             quant_norm(ndi_target + 1),
                             quant_norm(ndi_recon)], dim=0)
@@ -259,7 +267,7 @@ class MAEModule(L.LightningModule):
         #hog_recon = hog_recon * torch.cat([hog_recon, 1 - torch.abs(hog_recon - 0.5)*2, 1 - hog_recon], dim=1)
         #hog_target = hog_target * torch.cat([hog_target, 1 - torch.abs(hog_target - 0.5)*2, 1 - hog_target], dim=1)
         hog_recon_overlayed = torch.stack(hog_recon_overlayed_list)
-        combined = torch.cat([imgs * (1 - mask_expanded),
+        combined = torch.cat([imgs * (1 - mask_expanded) + 0.5 * mask_expanded,
                             hog_target.repeat(1, 3, 1, 1),
                             hog_recon.repeat(1, 3, 1, 1),
                             hog_recon_overlayed], dim=0)
@@ -291,7 +299,7 @@ class MAEModule(L.LightningModule):
         pred_vis = gt_vis * (1 - mask_expanded) + pred_vis * mask_expanded
 
         # input (masked image)
-        masked_imgs = imgs_vis * (1 - mask_expanded)
+        masked_imgs = imgs_vis * (1 - mask_expanded) + 0.5 * mask_expanded
 
         rows = [masked_imgs, # input
                 imgs_vis, # unmasked input

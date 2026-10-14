@@ -1,8 +1,17 @@
 ### Global variables ###
-seed: 42
+seed: 1
 img_size: 112
-in_chans: 10 # = num_bands
-bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+sensor: "S1"
+
+sensor_num_bands:
+  S1: 2
+  S2: 10
+sensor_bands:
+  S1: ["VH", "VV"]
+  S2: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+
+in_chans: ${sensor_num_bands.${sensor}}
+bands: ${sensor_bands.${sensor}}
 patch_size: 8
 mask_ratio: 0.75
 max_epochs: 100
@@ -12,7 +21,7 @@ defaults:
   - paths: cluster
   - experiment: baseline
 
-runs_json: "runs.json"
+runs_json: "artifacts/runs-${sensor}.json"
 resume_ckpt_path: null # Only Lightning resumes from this checkpoint. WandB starts fresh.
 
 ### Training hyperparameters ###
@@ -31,7 +40,7 @@ prefetch_factor: 3
 
 ### Logging ###
 wandb:
-  project: "RS_MAE-Thesis"
+  project: "RS_MAE-Paper"
   run_name: "${experiment_name}-${now:%m.%d_%H:%M}"
   run_id: null # both Lightning and WandB resume this run
   outdir: ${paths.wandb_outdir}
@@ -71,6 +80,7 @@ dataset:
   keys_path: ${paths.reben_keys}
   split_file: "datasets/splits/reben.parquet"
   align_size: 120
+  sensor: ${sensor}
   bands: ${bands}
   normalize: false # performed inside the model forward pass
 

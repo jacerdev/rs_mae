@@ -1,15 +1,13 @@
-reben_dir:             "/mnt/ssd/datasets/reben/BigEarthNet-S2-1%_lmdb/"
-#reben_dir:             "/mnt/ssd/datasets/reben/reben_7k/"
+reben_dir:             "/mnt/ssd/datasets/reben/BigEarthNet-${sensor}-1%_lmdb/"
 reben_keys:            null
 
-reben_7k_dir:          "/mnt/ssd/datasets/reben/reben_7k/"
-sen1floods11_dir:      "/mnt/ssd/datasets/sen1floods11/"
-cashew_plantation_dir: "/mnt/ssd/datasets/cashew_plantation/"
+reben_7k_dir:          "/mnt/ssd/datasets/reben/reben_7k-${sensor}/"
+cashew_plantation_dir: "/mnt/ssd/datasets/cashew_plantation/" # GEO-Bench: m-cashew-plantation
+cashew_benin_dir:      "/mnt/ssd/datasets/cashew_benin/" # GeoCrossBench Dataverse: x-cashew-benin
 c2seg_dir:             "/mnt/ssd/datasets/c2seg/"
-burn_scars_dir:        "/mnt/ssd/datasets/burn_scars/"
 mmhunan_dir:           "/mnt/ssd/datasets/mmhunan/"
 
 wandb_outdir:          "/mnt/ssd/outputs/training_out/"
 
-init_ckpt_path:        "/mnt/ssd/outputs/training_out/baseline_ep16.ckpt"
+#init_ckpt_path:        "/mnt/ssd/outputs/training_out/baseline_ep16.ckpt"
 artifacts_dir:         "/mnt/ssd/.FINISHED_RUNS"

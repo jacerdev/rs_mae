@@ -80,16 +80,12 @@ class SegmentationViTModule(L.LightningModule):
             for torchmetric in [self.val_acc, self.val_iou, self.val_f1]:
                 torchmetric.update(preds, masks)
         else:
-            preds_list = []
-            for sample in imgs:
-                pred = windowed_inference(model=self.model, image=sample,
-                                            window_size=input_size,
-                                            stride=input_size // 2,
-                                            num_classes=self.model.num_classes,
-                                            batch_size=self.trainer.datamodule.batch_size,
-                                            merger_device='cpu')
-                preds_list.append(pred)
-            preds = torch.stack(preds_list, dim=0) # (B, num_classes, H, W) on CPU
+            preds = windowed_inference(model=self.model, image=imgs,
+                                       window_size=input_size,
+                                       stride=input_size // 2,
+                                       num_classes=self.model.num_classes,
+                                       batch_size=self.trainer.datamodule.batch_size,
+                                       merger_device='cpu') # (B, num_classes, H, W) on CPU
             
             loss = windowed_evaluation(preds=preds, masks=masks,
                                    tile_size=int(input_size * self.trainer.datamodule.batch_size**0.5),

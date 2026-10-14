@@ -1,0 +1,28 @@
+# @package _global_
+
+img_size: 128
+batch_size: 16
+num_classes: 13
+
+sensor_num_bands:
+  S1: 2
+  S2: 4
+sensor_bands:
+  S1: ["VH", "VV"]
+  S2: ["B02", "B03", "B04", "B08"]
+
+num_bands: ${sensor_num_bands.${sensor}}
+
+# Data
+dataset:
+  data_dir: ${paths.c2seg_dir}
+  split_file: "datasets/splits/c2seg_ab.csv"
+  sensor: ${sensor}
+  bands: ${sensor_bands.${sensor}}
+  normalize: false
+
+  grid_sampling: true
+  crop_size: 128 # => grid shift margin = (886*.8 - 5*128, 1360 - 10*128) = (68, 80)
+  min_margin: 0
+
+dataset_name: "c2seg_ab"

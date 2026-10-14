@@ -118,11 +118,12 @@ class ReBENDataset(Dataset):
         999: -1,
     }
 
-    BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B11", "B12"]
+    S1_BANDS = ["VH", "VV"]
+    S2_BANDS = ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B11", "B12"]
 
     def __init__(self, data_dir, keys_path=None, # keys_path is to save/load keys to avoid scanning the entire LMDB
                  split_file=None, split=None, # split_file is a parquet file containing columns "patch_id", "split"
-                 align_size=120, bands=None, # bands defaults to all reBEN bands
+                 align_size=120, sensor="S2", bands=None, # bands defaults to all reBEN bands
                  normalize=True, transform=None, # transform must be an albumentations.Compose
                  val_to_train_frac=0.0, test_to_train_frac=0.0, seed=42, # requires split_file
                  blocklist_path=None, # blocklist_path is a path to a csv/parquet file containing column "patch_id"
@@ -132,11 +133,16 @@ class ReBENDataset(Dataset):
         self.data_dir = str(data_dir)
         self.split = split
         self.align_size = tuple(align_size) if hasattr(align_size, '__iter__') else (align_size, align_size)
-        self.bands = bands if bands is not None else ReBENDataset.BANDS
-        if any(b not in ReBENDataset.BANDS for b in self.bands): raise KeyError(f"At least one requested band is not available in reBEN.")
+        BANDS = ReBENDataset.S2_BANDS if sensor == "S2" else ReBENDataset.S1_BANDS
+        self.bands = bands if bands is not None else BANDS
+        if any(b not in BANDS for b in self.bands): raise KeyError(f"At least one requested band is not available in reBEN.")
         self.normalize = normalize
         self.transform = transform
         self.return_mask = return_mask
+
+        if self.normalize:
+            self.mean = torch.tensor([ReBENDataset.BAND_STATS["mean"][b] for b in self.bands], dtype=torch.float32).view(-1, 1, 1)
+            self.std = torch.tensor([ReBENDataset.BAND_STATS["std"][b] for b in self.bands], dtype=torch.float32).view(-1, 1, 1)
 
         # load all tensor keys present in the LMDB
         self.env = None
@@ -149,52 +155,59 @@ class ReBENDataset(Dataset):
             with lmdb.open(self.data_dir, readonly=True, lock=False, readahead=False, meminit=False) as env:
                 with env.begin(write=False) as transaction:
                     with transaction.cursor() as cursor:
-                        available_keys = set(key.decode('ascii') for key in cursor.iternext(keys=True, values=False))
+                        available_keys = set(key.decode('ascii') for key in cursor.iternext(keys=True, values=False) if not key.endswith(b"_reference_map")) # masks are fetched by id in __getitem__
                         logging.info(f"Loaded {len(available_keys)} keys from LMDB in {self.data_dir}")
             if keys_path is not None:
                 with keys_path.open("wb") as f: pickle.dump(available_keys, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-        if self.normalize:
-            self.mean = torch.tensor([ReBENDataset.BAND_STATS["mean"][b] for b in self.bands], dtype=torch.float32).view(-1, 1, 1)
-            self.std = torch.tensor([ReBENDataset.BAND_STATS["std"][b] for b in self.bands], dtype=torch.float32).view(-1, 1, 1)
+        # S1 LMDB keys are column s1_name in split_file, while S2 LMDB keys are patch_id: map keys to patch ids. Empty dict = identity (S2)
+        self.key_to_id = {}
+        id_to_key = {}
+        if sensor == "S1":
+            meta = (pd.read_csv(split_file, usecols=["patch_id", "s1_name"]) if split_file.endswith(".csv") else
+                    pd.read_parquet(split_file, columns=["patch_id", "s1_name"]))
+            id_to_key = dict(zip(meta["patch_id"], meta["s1_name"]))
+            self.key_to_id = {v: k for k, v in id_to_key.items()}
+        available_ids = set(self.key_to_id.get(k, k) for k in available_keys)
 
         if blocklist_path is not None:
             blocklist_df = (pd.read_csv(blocklist_path, usecols=["patch_id"]) if blocklist_path.endswith(".csv") else
                             pd.read_parquet(blocklist_path, columns=["patch_id"]))
-            blocklist_keys = set(blocklist_df["patch_id"].tolist())
-            available_keys = available_keys - blocklist_keys
-            logging.info(f"Blocked {len(blocklist_keys)} keys from {blocklist_path}")
+            blocklist_ids = set(blocklist_df["patch_id"].tolist())
+            available_ids = available_ids - blocklist_ids
+            logging.info(f"Blocked {len(blocklist_ids)} keys from {blocklist_path}")
 
         if split_file is None or split is None:
-            self.keys = sorted([k for k in available_keys if not k.endswith("_reference_map")])
+            ids = available_ids
         else:
             # filter for requested split if metadata is provided
             df = (pd.read_csv(split_file, usecols=["split", "patch_id"]) if split_file.endswith(".csv") else
                   pd.read_parquet(split_file, columns=["split", "patch_id"]))
-            split_keys = set(df[df['split'] == split]["patch_id"]).intersection(available_keys)
+            split_ids = set(df[df['split'] == split]["patch_id"]).intersection(available_ids)
             
             if include_unlisted and split == "train":
-                all_listed_keys = set(df["patch_id"])
-                unlisted_keys = available_keys - all_listed_keys
-                unlisted_keys = set([k for k in unlisted_keys if not k.endswith("_reference_map")])
-                split_keys = split_keys.union(unlisted_keys)
+                all_listed_ids = set(df["patch_id"])
+                unlisted_ids = available_ids - all_listed_ids
+                split_ids = split_ids.union(unlisted_ids)
             
             # Perform transfer from val/test set to train set if requested and valid
             if (val_to_train_frac > 0.0 or test_to_train_frac > 0.0) and split in ("train", "validation", "test"):
                 if split == "train":
-                    val_keys = set(df[df['split'] == "validation"]["patch_id"]).intersection(available_keys)
-                    split_keys, _ = _apply_fractional_split(split_keys, val_keys, val_to_train_frac, seed)
+                    val_ids = set(df[df['split'] == "validation"]["patch_id"]).intersection(available_ids)
+                    split_ids, _ = _apply_fractional_split(split_ids, val_ids, val_to_train_frac, seed)
 
-                    test_keys = set(df[df['split'] == "test"]["patch_id"]).intersection(available_keys)
-                    split_keys, _ = _apply_fractional_split(split_keys, test_keys, test_to_train_frac, seed)
+                    test_ids = set(df[df['split'] == "test"]["patch_id"]).intersection(available_ids)
+                    split_ids, _ = _apply_fractional_split(split_ids, test_ids, test_to_train_frac, seed)
                         
                 elif split == "validation":
-                    _, split_keys = _apply_fractional_split(set(), split_keys, val_to_train_frac, seed)
+                    _, split_ids = _apply_fractional_split(set(), split_ids, val_to_train_frac, seed)
                         
                 elif split == "test":
-                    _, split_keys = _apply_fractional_split(set(), split_keys, test_to_train_frac, seed)
+                    _, split_ids = _apply_fractional_split(set(), split_ids, test_to_train_frac, seed)
                         
-            self.keys = sorted(list(split_keys))
+            ids = split_ids
+
+        self.keys = sorted([id_to_key.get(i, i) for i in ids]) # map patch ids back to the actual LMDB keys
 
         # lookup table to convert mask classes
         if self.return_mask:
@@ -235,7 +248,7 @@ class ReBENDataset(Dataset):
         # load segmentation mask if requested
         mask = None
         if self.return_mask:
-            mask_key = f"{key_str}_reference_map"
+            mask_key = f"{self.key_to_id.get(key_str, key_str)}_reference_map"
             with self.env.begin(write=False) as txn:
                 mask_bytes = txn.get(mask_key.encode('ascii'))
                 if mask_bytes is None: raise ValueError(f"Mask missing for {key_str}")
@@ -286,6 +299,10 @@ def _apply_fractional_split(target_keys : set, source_keys : set, frac, seed=42)
     return target_keys.union(transferred_keys), remaining_source_keys
             
 def decompress_bytes(data) -> bytes:
+    """
+    Dataset LMDB was gzip-compressed so Linux can cache it entirely in RAM.
+    (SSD cannot keep up with the A100 GPU, so abundant CPU cycles are traded to decompress on the fly)
+    """
     if data[:2] == b'\x1f\x8b':
         import gzip
         return gzip.decompress(data)

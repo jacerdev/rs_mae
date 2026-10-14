@@ -14,12 +14,12 @@ import re
 import torch
 import wandb
 
-from datasets import ReBEN7kDataset, BurnScarsDataset, Sen1Floods11Dataset, C2SegDataset, CashewPlantationDataset, MMHunanDataset
+from datasets import ReBEN7kDataset, C2SegDataset, CashewPlantationDataset, MMHunanDataset
 from models.segmentation.segmentation_vit import load_pretrained_encoder_weights
 from test.benchmark import run_benchmark
 from train.callbacks import TrainingStateCallback
 from train.lightning_modules import SegmentationDataModule, SegmentationViTModule
-from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, BurnScarsDataset_Cfg, Sen1Floods11Dataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg, MMHunanDataset_Cfg
+from utils.config import SegmentationViT_Cfg, ReBEN7kDataset_Cfg, C2SegDataset_Cfg, CashewPlantationDataset_Cfg, MMHunanDataset_Cfg
 from utils.utils import log_run_to_json, get_checkpoints_dir, find_best_ckpt
 
 
@@ -44,7 +44,7 @@ def main(cfg: DictConfig):
             dataset_name=cfg.dataset_name,
             run_name=cfg.wandb.run_name, # or wandb_logger.experiment.name
             run_id=run_id,
-            json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "runs_dummy.json"
+            json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "artifacts/runs_dummy.json"
         )
 
     # Dataset
@@ -61,14 +61,6 @@ def main(cfg: DictConfig):
                                          border_mode=cv2.BORDER_REFLECT), ToTensorV2()], seed=cfg.seed)
             val_transform = A.Compose([A.PadIfNeeded(min_height=cfg.img_size, min_width=cfg.img_size,
                                        border_mode=cv2.BORDER_REFLECT), ToTensorV2()], seed=cfg.seed)
-        case "burn_scars":
-            dataset_class = BurnScarsDataset
-            dataset_class_cfg = BurnScarsDataset_Cfg
-
-        case "sen1floods11":
-            dataset_class = Sen1Floods11Dataset
-            dataset_class_cfg = Sen1Floods11Dataset_Cfg
-
         case "cashew_plantation":
             dataset_class = CashewPlantationDataset
             dataset_class_cfg = CashewPlantationDataset_Cfg
@@ -155,14 +147,14 @@ def main(cfg: DictConfig):
         logging.info(f"Fetching pretrained checkpoint for experiment: {pretrained_exp_key}")
         
         try:
-            ckpt_dir = get_checkpoints_dir(pretrained_exp_key, "reben", cfg.wandb.outdir, wandb_project=cfg.wandb.project, json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "runs_dummy.json")
+            ckpt_dir = get_checkpoints_dir(pretrained_exp_key, "reben", cfg.wandb.outdir, wandb_project=cfg.wandb.project, json_path=cfg.runs_json if not cfg.get("is_dummy", False) else "artifacts/runs_dummy.json")
             actual_path = find_best_ckpt(ckpt_dir)
             
             if not actual_path:
                 raise FileNotFoundError(f"Could not find a valid checkpoint in {ckpt_dir}")
                 
             logging.info(f"Found pretrained checkpoint at: {actual_path}")
-            load_pretrained_encoder_weights(model.model, str(actual_path), bands=cfg.dataset.bands)
+            load_pretrained_encoder_weights(model.model, str(actual_path), bands=cfg.dataset.bands, pretrained_model_bands=cfg.pretrained_model_bands)
             
         except Exception as e:
             logging.error(f"Failed to load pretrained weights from runs.json: {e}")
@@ -178,22 +170,22 @@ def main(cfg: DictConfig):
         # Benchmarking Peak Checkpoint
         best_ckpt_path = best_checkpoint_callback.best_model_path
         logging.info(f"Benchmarking BEST checkpoint: {best_ckpt_path}")
-        results = run_benchmark(cfg, ckpt_path=best_ckpt_path, results_dir="results/results_best")
+        results = run_benchmark(cfg, ckpt_path=best_ckpt_path, results_dir=f"results/{cfg.sensor}/results_peak")
         table = wandb.Table(columns=["Metric", "Value"])
         match = re.search(r"epoch=(\d+)", best_ckpt_path)
         best_epoch = int(match.group(1)) if match else "unknown"
         table.add_data("Epoch", best_epoch)
         for k, v in results.items(): table.add_data(k, v)
-        wandb.log({"test/results_best": table})
+        wandb.log({"test/results_peak": table})
 
         # Benchmarking Fully Annealed Checkpoint
         annealed_ckpt_path = annealed_checkpoint_callback.best_model_path
         logging.info(f"Benchmarking FULLY ANNEALED checkpoint: {annealed_ckpt_path}")
-        results_last = run_benchmark(cfg, ckpt_path=annealed_ckpt_path, results_dir="results/results_last")
-        table_last = wandb.Table(columns=["Metric", "Value"])
-        table_last.add_data("Epoch", trainer.current_epoch - 1)
-        for k, v in results_last.items(): table_last.add_data(k, v)
-        wandb.log({"test/results_last": table_last})
+        results_annealed = run_benchmark(cfg, ckpt_path=annealed_ckpt_path, results_dir=f"results/{cfg.sensor}/results_annealed")
+        table_annealed = wandb.Table(columns=["Metric", "Value"])
+        table_annealed.add_data("Epoch", trainer.current_epoch - 1)
+        for k, v in results_annealed.items(): table_annealed.add_data(k, v)
+        wandb.log({"test/results_annealed": table_annealed})
 
         exit_code = 0
     finally:

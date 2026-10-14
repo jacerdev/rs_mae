@@ -1,0 +1,4 @@
+split,city,side,frac
+train,augsburg,south,0.8
+validation,augsburg,north,0.2
+test,berlin,all,1.0

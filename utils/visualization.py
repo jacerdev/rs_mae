@@ -7,12 +7,10 @@ import numpy as np
 import textwrap
 import torch
 
-from datasets import ReBENDataset, BurnScarsDataset, Sen1Floods11Dataset, CashewPlantationDataset, C2SegDataset, MMHunanDataset
+from datasets import ReBENDataset, CashewPlantationDataset, C2SegDataset, MMHunanDataset
 
-
-def quant_norm(data, lower_quant=0.01, upper_quant=0.99):
-    """percentile-based stretching
-    processes each sample (image) in the batch independently"""
+def quant_norm(data, lower_quant=0.01, upper_quant=0.99, per_channel=True):
+    """Percentile-based stretching with optional independent per-channel scaling."""
     is_numpy = isinstance(data, np.ndarray)
     x = data.astype(np.float32, copy=True) if is_numpy else data.cpu().float().numpy()
     np.nan_to_num(x, copy=False, nan=0.0, posinf=1.0, neginf=0.0)
@@ -21,19 +19,27 @@ def quant_norm(data, lower_quant=0.01, upper_quant=0.99):
     if orig_ndim == 3: x = x[None, ...]
 
     B = x.shape[0]
+    c_axis = 1 if x.shape[1] <= 4 else -1  # (B, C, H, W) vs (B, H, W, C)
+
     for i in range(B):
         sample = x[i]
-        mask = sample != 0  # avoid masked array allocation
-        if not mask.any():
-            continue
-
-        vals = sample[mask]
-        lq, uq = np.quantile(vals, (lower_quant, upper_quant))
-        diff = uq - lq
-
-        sample -= lq
-        sample /= diff + 1e-8
-        np.clip(sample, 0, 1, out=sample)
+        if per_channel:
+            n_ch = sample.shape[0] if c_axis == 1 else sample.shape[-1]
+            for c in range(n_ch):
+                ch = sample[c] if c_axis == 1 else sample[..., c]
+                mask = ch != 0
+                if not mask.any(): continue
+                lq, uq = np.quantile(ch[mask], (lower_quant, upper_quant))
+                ch -= lq
+                ch /= (uq - lq + 1e-8)
+                np.clip(ch, 0, 1, out=ch)
+        else:
+            mask = sample != 0
+            if not mask.any(): continue
+            lq, uq = np.quantile(sample[mask], (lower_quant, upper_quant))
+            sample -= lq
+            sample /= (uq - lq + 1e-8)
+            np.clip(sample, 0, 1, out=sample)
 
     if orig_ndim == 3: x = x[0]
     return x if is_numpy else torch.from_numpy(x).to(data.device)
@@ -75,13 +81,9 @@ def get_id_to_class(dataset_name):
     match dataset_name:
         case "reben" | "reben_7k":
             return ReBENDataset.CLASSES
-        case "burn_scars":
-            return BurnScarsDataset.CLASSES
-        case "sen1floods11":
-            return Sen1Floods11Dataset.CLASSES
         case "cashew_plantation":
             return CashewPlantationDataset.CLASSES
-        case "c2seg_augsburg" | "c2seg_berlin" | "c2seg_beijing" | "c2seg_wuhan":
+        case "c2seg_ab" | "c2seg_bw":
             return C2SegDataset.CLASSES
         case "mmhunan":
             return MMHunanDataset.CLASSES
@@ -122,10 +124,13 @@ def prepare_segmentation_visuals(imgs, masks, preds, bands=None, dataset_name=No
     color_tensor = color_tensor.to(masks.device)
 
     # imgs
-    true_color_bands = ["B04", "B03", "B02"]
-    band_indices = [bands.index(b) for b in true_color_bands if b
-                    in bands] if bands is not None else [0, 1, 2]
-    imgs_vis = quant_norm(imgs[:, band_indices, :, :])
+    if bands is not None and set(bands) == {"VV", "VH"}:
+        imgs_vis = quant_norm(sar_false_color(imgs, bands))
+    else:
+        true_color_bands = ["B04", "B03", "B02"]
+        band_indices = [bands.index(b) for b in true_color_bands if b
+                        in bands] if bands is not None else [0, 1, 2]
+        imgs_vis = quant_norm(imgs[:, band_indices, :, :])
     
     # gt
     gt_vis = color_tensor[masks.long()].permute(0, 3, 1, 2) # (K, 3, H, W)
@@ -300,6 +305,21 @@ def plot_segmentation_mask(mask, dataset_name=None, legend_ax=None, wrap_width=2
         else:
             plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left')
 
+def sar_false_color(x, bands, mode="mean"):
+    """False-colour composite for dual-pol (VV, VH) SAR (mean, ratio, urban, veg)"""
+    stack = torch.stack if isinstance(x, torch.Tensor) else np.stack
+    dim = 1 if x.ndim == 4 else (-1 if x.shape[-1] == len(bands) else 0)
+    vv = x[:, bands.index("VV")] if dim == 1 else x[..., bands.index("VV")]
+    vh = x[:, bands.index("VH")] if dim == 1 else x[..., bands.index("VH")]
+
+    composites = {
+        "mean":  (vv, vh, (vv + vh) / 2),
+        "ratio": (vv, vh, vv - vh),
+        "urban": (vv, (vv + vh) / 2, vh),
+        "veg":   (vh, vv, vh - vv),
+    }
+    kw = {"dim": dim} if isinstance(x, torch.Tensor) else {"axis": dim}
+    return stack(composites[mode], **kw)
 
 SEMANTIC_COLORS = {
     "unlabeled": "#808080",              # neutral gray
@@ -307,9 +327,8 @@ SEMANTIC_COLORS = {
     # Human Impact / Infrastructure
     "urban": "#e31a1c",                  # distinct red
     "industrial": "#6a3d9a",             # deep purple
-    "street": "#333333",                 # dark charcoal
-    "industrial_disturbance": "#4d004b", # very dark purple
-    "burn_scar": "#7f0000",              # dark mahogany
+    "street": "#565656",                 # Atomic Grey
+    "industrial_disturbance": "#7f0000", # dark mahogany
     
     # Agriculture (Yellow/Brown Tones)
     "arable": "#fff5d7",                 # pale cream
@@ -359,16 +378,6 @@ CLASSES_TO_SEMANTIC = {
     "Inland waters": "water_inland",
     "Marine waters": "water_marine",
     
-    # Sen1Floods11
-    "Missing data": "unlabeled",
-    "No flood": "natural_grassland",
-    "Flood": "wetland_coastal",
-    
-    # BurnScars
-    #"Missing data": "unlabeled",
-    "Not burned": "natural_grassland",
-    "Burn scar": "burn_scar",
-
     # CashewPlantation
     "No data": "unlabeled",
     "Well-managed plantation": "permanent_crops",

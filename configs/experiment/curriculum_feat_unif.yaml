@@ -33,5 +33,3 @@ loss:
   lambda_unif: 0.01
   base_loss:
     _target_: models.strategies.target.hog_ndi.HOGNDILoss
-
-use_last_ckpt: true

@@ -1,0 +1,4 @@
+split,city,side,frac
+train,beijing,west,0.85
+validation,beijing,east,0.15
+test,wuhan,all,1.0
