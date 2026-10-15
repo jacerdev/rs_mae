@@ -47,7 +47,7 @@ def main(cfg: DictConfig):
     match cfg.experiment_name:
         case "baseline" | "baseline_200ep" | "baseline_full_200ep":
             pass
-        case "feat_guided":
+        case "feat_guided" | "hog_target":
             pass
         case "curriculum_ndi" | "curriculum_hog" | "curriculum_ndi_sigmae" | "curriculum_feat_unif":
             masker_kwargs = {"saliency_extractor": instantiate(cfg.saliency_extractor)}

@@ -2,7 +2,7 @@
 #SBATCH --job-name=rs_mae_train
 
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=80G
+#SBATCH --mem=150G
 #SBATCH --cpus-per-gpu=26
 #SBATCH --partition=gpu_short
 #SBATCH --time=0-14:00:00
@@ -11,6 +11,11 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=your.email@example.com
 #SBATCH --output=/scratch/%u/outputs/slurm/job-%j.slurm.out
+
+if [ -z "$1" ]; then
+    echo "Usage: sbatch $0 <experiment_name_1> [experiment_name_2...] [hydra_overrides...]"
+    exit 1
+fi
 
 cd "$HOME/projects/rs_mae/"
 
@@ -40,11 +45,6 @@ echo -e "• Node: $(hostname) • SLURM_JOB_NODELIST: $SLURM_JOB_NODELIST\n• 
 echo "Using python: $(which python)"
 
 # --------------------------------------------------
-
-if [ -z "$1" ]; then
-    echo "Usage: sbatch $0 <experiment_name_1> [experiment_name_2...] [hydra_overrides...]"
-    exit 1
-fi
 
 # Parse experiment names (stop at the first hydra override containing '=')
 experiments=()

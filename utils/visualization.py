@@ -167,7 +167,8 @@ def generate_saliency_grid(saliency_grid, image=None, alpha=0.5, vmin=None, vmax
 
 def generate_hog_image(hog_grid: torch.Tensor,
                        image: np.ndarray = None,
-                       cell_size: int = 16) -> np.ndarray:
+                       cell_size: int = 16,
+                       line_color: str = None) -> np.ndarray:
     """Render a HOG visualisation from a grid of HOG features.
 
     The function can either draw the orientation lines onto a blank canvas or
@@ -211,6 +212,10 @@ def generate_hog_image(hog_grid: torch.Tensor,
     cell_gradient = np.abs(cell_gradient) # **2 # contrast boost
     cell_gradient = np.nan_to_num(cell_gradient, nan=0.0)
 
+    if line_color is None: line_color = (1.0, 1.0, 1.0)
+    else: line_color = to_rgb(line_color)
+
+    is_rgb = (hog_image.ndim == 3 and hog_image.shape[-1] == 3)
     cell_half = pool // 2
     max_mag = cell_gradient.max()
     angle_gap = 180.0 / nbins # HOG bins span [0°, 180°)
@@ -232,7 +237,7 @@ def generate_hog_image(hog_grid: torch.Tensor,
                 x2 = cx - int(magnitude * cell_half * cos_a)
                 y2 = cy - int(magnitude * cell_half * sin_a)
                 intensity = int(255 * math.sqrt(magnitude))
-                color = (intensity, intensity, intensity) if hog_image.shape[-1] == 3 else intensity
+                color = tuple(int(c * intensity) for c in line_color) if is_rgb else intensity
                 cv2.line(hog_image, (y1, x1), (y2, x2), color=color, thickness=2 if hog_image.shape[0] > 200 else 1)
     return hog_image
 

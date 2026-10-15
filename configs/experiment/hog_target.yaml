@@ -1,0 +1,19 @@
+# @package _global_
+experiment_name: "hog_target"
+
+masker:
+  _target_: models.strategies.masker.RandomMasker
+
+target:
+  _target_: models.strategies.target.HOGTarget
+  norm_pix: true # per patch z-normalization
+  bands: ${bands}
+  patch_size: ${patch_size}
+  pool: 8 # must be a divisor of patch_size
+  nbins: 9
+  use_max_gradient: false # false: predict HOG for each band (VV & VH on S1); true: collapse to single max-gradient
+  gaussian_window: null
+  normalize: true # per grid cell L2 normalization over bins
+
+loss:
+  _target_: models.strategies.loss.MaskedMSELoss

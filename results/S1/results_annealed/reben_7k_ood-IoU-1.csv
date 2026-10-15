@@ -1,0 +1,21 @@
+,,
+Class,Baseline,Curriculum Hog
+Urban fabric,50.93,49.75
+Industrial or commercial units,31.20,29.39
+Arable land,46.36,44.77
+Permanent crops,1.05,3.94
+Pastures,10.86,12.17
+Complex cultivation patterns,8.72,7.52
+"Land principally occupied by agriculture, with significant areas of natural vegetation",7.89,9.20
+Agro-forestry areas,0.00,0.00
+Broad-leaved forest,17.34,17.28
+Coniferous forest,2.91,3.02
+Mixed forest,6.20,8.63
+Natural grassland and sparsely vegetated areas,9.09,8.76
+"Moors, heathland and sclerophyllous vegetation",7.82,5.53
+"Transitional woodland, shrub",4.87,3.46
+"Beaches, dunes, sands",18.22,21.79
+Inland wetlands,0.00,0.01
+Coastal wetlands,9.69,2.37
+Inland waters,57.38,57.59
+Marine waters,95.77,95.49

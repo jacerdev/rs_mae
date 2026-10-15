@@ -1,0 +1,20 @@
+,,,
+Dataset,Metric,Baseline,Curriculum Hog
+C2Seg Ab,OA,15.01,28.29
+,mIoU,4.01,8.04
+,mF1,6.97,13.37
+C2Seg Bw,OA,36.87,37.91
+,mIoU,11.90,12.13
+,mF1,18.05,18.48
+Cashew Plantation,OA,46.35,46.26
+,mIoU,18.88,18.34
+,mF1,28.08,27.49
+Mmhunan,OA,74.36,74.13
+,mIoU,36.06,35.52
+,mF1,45.36,44.61
+Reben 7K,OA,47.13,46.58
+,mIoU,26.19,26.14
+,mF1,38.15,38.43
+Reben 7K Ood,OA,36.15,35.69
+,mIoU,20.33,20.04
+,mF1,28.28,27.87

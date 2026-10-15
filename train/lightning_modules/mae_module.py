@@ -93,9 +93,9 @@ class MAEModule(L.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "interval": "step"}}
 
     def _log_reconstructions(self, outputs, split):
-        from models.strategies.target import HOGNDITarget
+        from models.strategies.target import HOGNDITarget, HOGTarget
         from models.strategies.target.segmentation import SegmentationTarget
-        if hasattr(self.model, "target") and type(self.model.target).__name__ == "HOGNDITarget":
+        if hasattr(self.model, "target") and type(self.model.target).__name__ in ("HOGNDITarget", "HOGTarget"):
             self._log_hog_ndi_reconstructions(outputs, split)
         elif hasattr(self.model, "target") and type(self.model.target).__name__ == "SegmentationTarget":
             self._log_segmentation_reconstructions(outputs, split)
@@ -218,9 +218,14 @@ class MAEModule(L.LightningModule):
         mask_expanded = mask.reshape(num_samples, h, w).repeat_interleave(p, dim=1).repeat_interleave(p, dim=2).unsqueeze(1)  # (num_samples, 1, H, W)
         
         # target
-        hog_target, ndi_target = [t.detach() for t in self.model.target(imgs, raw_imgs=raw_imgs)]
-        hog_target, ndi_target = self.model.target.restore(torch.cat([hog_target, ndi_target], dim=-1), gt_imgs=raw_imgs)
-        ndi_target = unpatchify(ndi_target, p, H, W, self.model.target.NUM_NDI_CHANNELS)
+        has_ndi = hasattr(self.model.target, "NUM_NDI_CHANNELS")
+        if has_ndi:
+            hog_target, ndi_target = [t.detach() for t in self.model.target(imgs, raw_imgs=raw_imgs)]
+            hog_target, ndi_target = self.model.target.restore(torch.cat([hog_target, ndi_target], dim=-1), gt_imgs=raw_imgs)
+            ndi_target = unpatchify(ndi_target, p, H, W, self.model.target.NUM_NDI_CHANNELS)
+        else:
+            hog_target = self.model.target(imgs).detach()
+            hog_target = self.model.target.restore(hog_target, gt_imgs=raw_imgs)
         
         pool = self.model.target.pool
         nbins = self.model.target.nbins
@@ -229,9 +234,12 @@ class MAEModule(L.LightningModule):
         hog_target = hog_target.reshape(num_samples, -1, nbins, h*n, w*n) # (num_samples, C, nbins, hn, wn)
 
         # output
-        hog_pred, ndi_pred = self.model.target.restore(pred, gt_imgs=raw_imgs)
-        ndi_recon = unpatchify(ndi_pred, p, H, W, self.model.target.NUM_NDI_CHANNELS)
-        ndi_recon = ndi_target * (1 - mask_expanded) + ndi_recon * mask_expanded
+        if has_ndi:
+            hog_pred, ndi_pred = self.model.target.restore(pred, gt_imgs=raw_imgs)
+            ndi_recon = unpatchify(ndi_pred, p, H, W, self.model.target.NUM_NDI_CHANNELS)
+            ndi_recon = ndi_target * (1 - mask_expanded) + ndi_recon * mask_expanded
+        else:
+            hog_pred = self.model.target.restore(pred, gt_imgs=raw_imgs)
 
         mask_expanded_hog = mask.reshape(num_samples, h, w).repeat_interleave(n, dim=1).repeat_interleave(n, dim=2).unsqueeze(1).unsqueeze(1) # (num_samples, 1, 1, hn, wn)
         hog_recon = hog_pred.reshape(num_samples, h, w, -1, n, n, nbins).permute(0, 3, 6, 1, 4, 2, 5) # (num_samples, C, nbins, h, n, w, n)
@@ -239,18 +247,23 @@ class MAEModule(L.LightningModule):
         hog_recon = hog_target * (1 - mask_expanded_hog) + hog_recon * mask_expanded_hog
 
         # log
-        true_color_bands = ["B04", "B03", "B02"]
-        band_indices = [self.bands.index(b) for b in true_color_bands if b
-                        in self.bands] if self.bands is not None else [0, 1, 2]
+        if set(self.bands) == {"VV", "VH"}:
+            imgs = sar_false_color(imgs, self.bands)
+            band_indices = slice(None)
+        else:
+            true_color_bands = ["B04", "B03", "B02"]
+            band_indices = [self.bands.index(b) for b in true_color_bands if b in self.bands] if self.bands is not None else [0, 1, 2]
+            imgs = imgs[:, band_indices, :, :]
+        imgs = quant_norm(imgs)
                 
         # NDI
-        imgs = quant_norm(imgs[:, band_indices, :, :])
-        combined = torch.cat([imgs * (1 - mask_expanded) + 0.5 * mask_expanded,
-                            imgs,
-                            quant_norm(ndi_target + 1),
-                            quant_norm(ndi_recon)], dim=0)
-        grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
-        self.logger.log_image(key=f"reconstructions/{split}_ndi", images=[grid], step=self.global_step)
+        if has_ndi:
+            combined = torch.cat([imgs * (1 - mask_expanded) + 0.5 * mask_expanded,
+                                imgs,
+                                quant_norm(ndi_target + 1),
+                                quant_norm(ndi_recon)], dim=0)
+            grid = vutils.make_grid(combined, nrow=num_samples, normalize=False)
+            self.logger.log_image(key=f"reconstructions/{split}_ndi", images=[grid], step=self.global_step)
         
         # HOG
         if self.model.target.hog_out_channels == 1: band_indices = [0]
@@ -260,7 +273,7 @@ class MAEModule(L.LightningModule):
         for i in range(num_samples):
             hog_target_list.append(torch.from_numpy(generate_hog_image(hog_target[i, band_indices], cell_size=pool*scale_factor).transpose(2,0,1)/255).to(imgs.device))
             hog_recon_list.append(torch.from_numpy(generate_hog_image(hog_recon[i, band_indices], cell_size=pool*scale_factor).transpose(2,0,1)/255).to(imgs.device))
-            hog_recon_overlayed_list.append(torch.from_numpy(generate_hog_image(hog_recon[i, band_indices], image=imgs[i]).transpose(2,0,1)/255).to(imgs.device))
+            hog_recon_overlayed_list.append(torch.from_numpy(generate_hog_image(hog_recon[i, band_indices], image=imgs[i], line_color="blue" if set(self.bands)=={"VV","VH"} else None).transpose(2,0,1)/255).to(imgs.device))
 
         hog_recon = torch.stack(hog_recon_list)
         hog_target = torch.stack(hog_target_list)
