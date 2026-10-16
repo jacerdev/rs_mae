@@ -87,7 +87,7 @@ dataset:
   val_to_train_frac: 0.85
   test_to_train_frac: 1.0
   seed: ${seed}
-  blocklist_path: "datasets/splits/reben_7k.csv"
+  blocklist_path: "datasets/splits/reben_7k_ood.csv"
 
   return_mask: false
   include_unlisted: false

@@ -5,7 +5,7 @@
 #SBATCH --mem=150G
 #SBATCH --cpus-per-gpu=26
 #SBATCH --partition=gpu_short
-#SBATCH --time=0-14:00:00
+#SBATCH --time=1-00:00:00
 ########SBATCH --nodelist=gpu026
 
 #SBATCH --mail-type=ALL
