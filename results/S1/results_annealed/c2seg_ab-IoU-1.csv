@@ -1,15 +1,15 @@
-,,
-Class,Baseline,Curriculum Hog
-Surface water,14.86,20.36
-Street,0.16,0.92
-Urban Fabric,1.37,18.45
-"Industrial, commercial and transport",17.77,22.13
-"Mine, dump, and construction sites",0.00,0.00
-"Artificial, vegetated areas",1.81,1.59
-Arable Land,15.87,25.83
-Permanent Crops,0.00,0.00
-Pastures,0.00,0.00
-Forests,0.25,15.11
-Shrub,0.04,0.19
-Open spaces with no vegetation,0.00,0.00
-Inland wetlands,0.00,0.00
+,,,,
+Class,Baseline,Curriculum Hog,Hog Target,Hog Weighted
+Surface water,14.86,20.36,5.45,19.24
+Street,0.16,0.92,0.43,0.48
+Urban Fabric,1.37,18.45,11.07,4.14
+"Industrial, commercial and transport",17.77,22.13,16.91,8.78
+"Mine, dump, and construction sites",0.00,0.00,0.00,0.00
+"Artificial, vegetated areas",1.81,1.59,8.51,1.49
+Arable Land,15.87,25.83,12.51,21.96
+Permanent Crops,0.00,0.00,0.00,0.00
+Pastures,0.00,0.00,0.00,0.00
+Forests,0.25,15.11,21.86,11.50
+Shrub,0.04,0.19,2.95,0.20
+Open spaces with no vegetation,0.00,0.00,0.00,0.00
+Inland wetlands,0.00,0.00,0.00,0.00

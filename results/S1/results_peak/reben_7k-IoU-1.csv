@@ -1,21 +1,21 @@
-,,
-Class,Curriculum Hog,Baseline
-Urban fabric,47.27,45.74
-Industrial or commercial units,23.29,21.65
-Arable land,39.86,39.89
-Permanent crops,16.74,18.12
-Pastures,7.86,8.82
-Complex cultivation patterns,15.18,15.75
-"Land principally occupied by agriculture, with significant areas of natural vegetation",15.93,16.13
-Agro-forestry areas,32.03,33.85
-Broad-leaved forest,32.97,32.67
-Coniferous forest,36.09,36.81
-Mixed forest,25.61,26.26
-Natural grassland and sparsely vegetated areas,7.42,4.02
-"Moors, heathland and sclerophyllous vegetation",6.29,5.53
-"Transitional woodland, shrub",15.45,17.87
-"Beaches, dunes, sands",0.00,0.00
-Inland wetlands,23.30,23.27
-Coastal wetlands,19.91,15.80
-Inland waters,53.21,50.87
-Marine waters,75.82,74.13
+,,,,
+Class,Curriculum Hog,Baseline,Hog Target,Hog Weighted
+Urban fabric,47.27,45.74,49.40,51.23
+Industrial or commercial units,23.29,21.65,24.88,21.34
+Arable land,39.86,39.89,43.35,43.26
+Permanent crops,16.74,18.12,14.70,15.72
+Pastures,7.86,8.82,9.94,3.27
+Complex cultivation patterns,15.18,15.75,17.42,15.43
+"Land principally occupied by agriculture, with significant areas of natural vegetation",15.93,16.13,19.30,18.46
+Agro-forestry areas,32.03,33.85,34.96,30.25
+Broad-leaved forest,32.97,32.67,36.09,31.85
+Coniferous forest,36.09,36.81,37.66,35.12
+Mixed forest,25.61,26.26,26.47,26.86
+Natural grassland and sparsely vegetated areas,7.42,4.02,12.50,7.79
+"Moors, heathland and sclerophyllous vegetation",6.29,5.53,10.37,8.01
+"Transitional woodland, shrub",15.45,17.87,12.51,18.40
+"Beaches, dunes, sands",0.00,0.00,0.02,0.20
+Inland wetlands,23.30,23.27,24.20,22.72
+Coastal wetlands,19.91,15.80,16.55,18.96
+Inland waters,53.21,50.87,55.49,54.56
+Marine waters,75.82,74.13,76.08,75.60

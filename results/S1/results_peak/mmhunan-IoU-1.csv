@@ -1,9 +1,9 @@
-,,
-Class,Baseline,Curriculum Hog
-Cropland,53.75,53.28
-Forest,68.90,68.98
-Grassland,2.44,2.78
-Wetland,6.37,4.25
-Water,71.38,70.27
-Unused land,2.06,1.35
-Built-up area,49.09,49.02
+,,,,
+Class,Baseline,Curriculum Hog,Hog Target,Hog Weighted
+Cropland,53.75,53.28,54.80,53.70
+Forest,68.90,68.98,70.35,69.55
+Grassland,2.44,2.78,5.98,2.23
+Wetland,6.37,4.25,2.28,4.46
+Water,71.38,70.27,73.37,72.68
+Unused land,2.06,1.35,1.41,2.27
+Built-up area,49.09,49.02,50.66,49.57

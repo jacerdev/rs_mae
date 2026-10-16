@@ -1,0 +1,34 @@
+# @package _global_
+experiment_name: "curriculum_feat_unif_s1"
+
+masker:
+  _target_: models.strategies.masker.CurriculumMasker
+  max_epochs: ${max_epochs}
+  easy_end: 0.0 # no easy phase (min_w is not used)
+  hard_start: 0.3 # start hard phase at 30% of training
+  min_w: null
+  max_w: 1.0
+  mixed_batch: true
+
+saliency_extractor:
+  _target_: utils.features.HOGSaliency
+  nbins: 9
+  pool: ${patch_size}
+  in_channels: ${in_chans}
+
+target:
+  _target_: models.strategies.target.HOGTarget
+  norm_pix: true # per patch z normalization
+  bands: ${bands}
+  patch_size: ${patch_size}
+  pool: 8 # must be a divisor of patch_size
+  nbins: 9
+  use_max_gradient: false
+  gaussian_window: null
+  normalize: true # per grid cell L2 normalization over bins
+
+loss:
+  _target_: models.strategies.loss.uniformity.UniformityEnhancedMAELoss
+  lambda_unif: 0.01
+  base_loss:
+    _target_: models.strategies.loss.MaskedMSELoss

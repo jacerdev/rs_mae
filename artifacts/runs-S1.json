@@ -50,5 +50,57 @@
             "run_name": "baseline-c2seg_bw-10.15_15:49",
             "run_id": "hm7ifnz5"
         }
+    },
+    "hog_target-1": {
+        "reben": {
+            "run_name": "hog_target-10.16_03:45",
+            "run_id": "c3e4gv31"
+        },
+        "c2seg_ab": {
+            "run_name": "hog_target-c2seg_ab-10.16_12:26",
+            "run_id": "gf6qegiu"
+        },
+        "mmhunan": {
+            "run_name": "hog_target-mmhunan-10.16_12:59",
+            "run_id": "vr06ae14"
+        },
+        "cashew_plantation": {
+            "run_name": "hog_target-cashew_plantation-10.16_13:44",
+            "run_id": "iny5u19s"
+        },
+        "reben_7k": {
+            "run_name": "hog_target-reben_7k-10.16_15:06",
+            "run_id": "cmrm8dvh"
+        },
+        "c2seg_bw": {
+            "run_name": "hog_target-c2seg_bw-10.16_16:36",
+            "run_id": "eascneat"
+        }
+    },
+    "hog_weighted-1": {
+        "reben": {
+            "run_name": "hog_weighted-10.16_03:45",
+            "run_id": "2mt5h7hx"
+        },
+        "c2seg_ab": {
+            "run_name": "hog_weighted-c2seg_ab-10.16_12:26",
+            "run_id": "golm5vwv"
+        },
+        "mmhunan": {
+            "run_name": "hog_weighted-mmhunan-10.16_12:59",
+            "run_id": "t0vur5jy"
+        },
+        "cashew_plantation": {
+            "run_name": "hog_weighted-cashew_plantation-10.16_13:44",
+            "run_id": "0oxtyik8"
+        },
+        "reben_7k": {
+            "run_name": "hog_weighted-reben_7k-10.16_15:06",
+            "run_id": "cbkq3ier"
+        },
+        "c2seg_bw": {
+            "run_name": "hog_weighted-c2seg_bw-10.16_16:36",
+            "run_id": "yue5zjqw"
+        }
     }
 }
