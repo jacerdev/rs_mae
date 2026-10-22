@@ -1,15 +1,15 @@
-,,
-Class,Baseline,Curriculum Hog
-Surface water,58.55,56.94
-Street,6.51,7.00
-Urban Fabric,22.40,23.28
-"Industrial, commercial and transport",17.84,17.88
-"Mine, dump, and construction sites",1.81,1.56
-"Artificial, vegetated areas",6.02,6.72
-Arable Land,16.74,17.89
-Permanent Crops,0.00,0.00
-Pastures,0.00,0.00
-Forests,26.89,29.68
-Shrub,0.43,1.19
-Open spaces with no vegetation,0.00,0.00
-Inland wetlands,0.00,0.00
+,baseline,,,masking,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Hog,Latent Target,Hog Target,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif S1
+Surface water,58.55,55.36,56.21,56.94,62.67,54.79,61.48,53.80,62.26,57.06
+Street,6.51,5.06,5.87,7.00,8.34,7.64,7.07,5.92,6.51,7.06
+Urban Fabric,22.40,21.11,23.12,23.28,16.16,20.13,23.45,23.19,22.27,24.65
+"Industrial, commercial and transport",17.84,22.23,20.21,17.88,14.87,22.44,23.48,19.51,20.72,19.85
+"Mine, dump, and construction sites",1.81,1.27,1.13,1.56,0.84,1.86,1.24,1.40,1.44,1.51
+"Artificial, vegetated areas",6.02,6.61,6.80,6.72,5.52,7.13,7.09,6.75,7.09,6.38
+Arable Land,16.74,13.27,13.11,17.89,9.23,9.16,5.34,16.94,11.71,13.00
+Permanent Crops,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+Pastures,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+Forests,26.89,30.37,30.19,29.68,25.75,27.14,28.71,29.40,29.74,25.10
+Shrub,0.43,0.47,0.81,1.19,0.20,0.95,1.02,0.56,1.27,1.98
+Open spaces with no vegetation,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+Inland wetlands,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00

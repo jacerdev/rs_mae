@@ -1,21 +1,21 @@
-,,,,
-Class,Curriculum Hog,Baseline,Hog Target,Hog Weighted
-Urban fabric,47.27,45.74,49.40,51.23
-Industrial or commercial units,23.29,21.65,24.88,21.34
-Arable land,39.86,39.89,43.35,43.26
-Permanent crops,16.74,18.12,14.70,15.72
-Pastures,7.86,8.82,9.94,3.27
-Complex cultivation patterns,15.18,15.75,17.42,15.43
-"Land principally occupied by agriculture, with significant areas of natural vegetation",15.93,16.13,19.30,18.46
-Agro-forestry areas,32.03,33.85,34.96,30.25
-Broad-leaved forest,32.97,32.67,36.09,31.85
-Coniferous forest,36.09,36.81,37.66,35.12
-Mixed forest,25.61,26.26,26.47,26.86
-Natural grassland and sparsely vegetated areas,7.42,4.02,12.50,7.79
-"Moors, heathland and sclerophyllous vegetation",6.29,5.53,10.37,8.01
-"Transitional woodland, shrub",15.45,17.87,12.51,18.40
-"Beaches, dunes, sands",0.00,0.00,0.02,0.20
-Inland wetlands,23.30,23.27,24.20,22.72
-Coastal wetlands,19.91,15.80,16.55,18.96
-Inland waters,53.21,50.87,55.49,54.56
-Marine waters,75.82,74.13,76.08,75.60
+,baseline,,,masking,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Hog,Latent Target,Hog Target,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif S1
+Urban fabric,45.74,46.41,47.63,47.27,46.48,49.40,53.00,51.23,49.52,47.40
+Industrial or commercial units,21.65,18.64,21.95,23.29,14.68,24.88,26.08,21.34,15.24,23.97
+Arable land,39.89,40.72,40.62,39.86,40.24,43.35,47.84,43.26,42.07,44.56
+Permanent crops,18.12,8.92,12.47,16.74,11.70,14.70,19.90,15.72,17.90,16.22
+Pastures,8.82,5.83,8.01,7.86,5.76,9.94,16.36,3.27,7.48,8.96
+Complex cultivation patterns,15.75,15.52,13.74,15.18,17.00,17.42,15.90,15.43,15.38,14.51
+"Land principally occupied by agriculture, with significant areas of natural vegetation",16.13,13.34,17.30,15.93,15.97,19.30,18.21,18.46,16.18,20.58
+Agro-forestry areas,33.85,32.29,30.69,32.03,33.38,34.96,32.73,30.25,31.05,34.11
+Broad-leaved forest,32.67,31.98,32.70,32.97,32.44,36.09,35.72,31.85,32.72,33.63
+Coniferous forest,36.81,34.19,35.74,36.09,35.65,37.66,37.24,35.12,35.16,36.41
+Mixed forest,26.26,25.29,23.88,25.61,26.69,26.47,29.26,26.86,28.16,28.01
+Natural grassland and sparsely vegetated areas,4.02,5.05,4.63,7.42,5.25,12.50,14.45,7.79,11.15,9.50
+"Moors, heathland and sclerophyllous vegetation",5.53,7.88,7.41,6.29,8.10,10.37,10.22,8.01,5.71,9.16
+"Transitional woodland, shrub",17.87,13.32,15.64,15.45,14.46,12.51,16.14,18.40,17.71,16.39
+"Beaches, dunes, sands",0.00,0.24,0.00,0.00,0.26,0.02,0.59,0.20,0.01,0.03
+Inland wetlands,23.27,22.32,23.40,23.30,23.82,24.20,32.41,22.72,22.07,24.73
+Coastal wetlands,15.80,12.29,15.81,19.91,15.45,16.55,20.32,18.96,15.34,16.36
+Inland waters,50.87,50.85,54.26,53.21,57.88,55.49,65.90,54.56,53.97,59.24
+Marine waters,74.13,73.60,77.49,75.82,78.18,76.08,88.50,75.60,77.19,82.37

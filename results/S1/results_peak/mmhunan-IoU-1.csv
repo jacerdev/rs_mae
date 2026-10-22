@@ -1,9 +1,9 @@
-,,,,
-Class,Baseline,Curriculum Hog,Hog Target,Hog Weighted
-Cropland,53.75,53.28,54.80,53.70
-Forest,68.90,68.98,70.35,69.55
-Grassland,2.44,2.78,5.98,2.23
-Wetland,6.37,4.25,2.28,4.46
-Water,71.38,70.27,73.37,72.68
-Unused land,2.06,1.35,1.41,2.27
-Built-up area,49.09,49.02,50.66,49.57
+,baseline,,,masking,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Hog,Latent Target,Hog Target,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif S1
+Cropland,53.75,52.92,52.41,53.28,52.13,54.80,54.16,53.70,52.47,54.99
+Forest,68.90,68.88,68.59,68.98,69.32,70.35,70.04,69.55,68.37,70.05
+Grassland,2.44,1.10,0.45,2.78,0.61,5.98,1.76,2.23,2.25,5.60
+Wetland,6.37,5.47,5.76,4.25,4.34,2.28,7.98,4.46,8.59,6.41
+Water,71.38,71.06,72.80,70.27,70.59,73.37,67.33,72.68,70.49,67.90
+Unused land,2.06,2.11,0.68,1.35,2.12,1.41,1.32,2.27,3.08,2.48
+Built-up area,49.09,49.12,48.77,49.02,49.14,50.66,50.72,49.57,48.54,50.71

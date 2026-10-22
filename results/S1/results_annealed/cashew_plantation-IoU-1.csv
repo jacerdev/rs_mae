@@ -1,8 +1,8 @@
-,,,,
-Class,Curriculum Hog,Baseline,Hog Target,Hog Weighted
-Well-managed plantation,3.20,2.28,3.40,2.55
-Poorly-managed plantation,29.60,30.37,28.18,30.30
-Non-plantation,2.07,2.83,2.76,2.52
-Residential,33.49,36.49,37.50,37.68
-Background_cashew,41.68,41.33,41.52,41.42
-Uncertain,0.00,0.00,0.00,0.00
+,baseline,,,masking,target,,,loss,,combination
+Class,Baseline,Baseline 200Ep,Baseline Full 200Ep,Curriculum Hog,Latent Target,Hog Target,Segmentation Target,Hog Weighted,Glcm Loss,Curriculum Feat Unif S1
+Well-managed plantation,2.28,3.19,2.23,3.20,1.81,3.40,2.11,2.55,3.40,3.04
+Poorly-managed plantation,30.37,30.58,29.79,29.60,29.22,28.18,30.72,30.30,30.93,30.58
+Non-plantation,2.83,1.40,1.82,2.07,0.29,2.76,3.92,2.52,2.92,2.57
+Residential,36.49,33.88,34.24,33.49,28.62,37.50,36.46,37.68,38.48,34.46
+Background_cashew,41.33,40.72,41.15,41.68,40.78,41.52,41.40,41.42,41.52,41.66
+Uncertain,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00
